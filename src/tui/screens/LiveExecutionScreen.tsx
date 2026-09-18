@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 
-import { runExecution } from "../../cli/commands.js";
+import { runExecution, type ExecutionResultSummary } from "../../cli/commands.js";
 import type { NovaRuntime } from "../../cli/context.js";
 import type { RunEvent, TestRunState, VerbosityLevel } from "../../domain/index.js";
 import { palette } from "../theme/palette.js";
@@ -26,6 +26,15 @@ type LiveExecutionScreenProps = {
   onOpenCommandMode: () => void;
   /** False while the `:`-mode command bar owns keyboard input, so keystrokes are never handled twice. */
   inputActive?: boolean;
+  /**
+   * Overrides the default `runExecution(runtime, { plan: run.runId })`
+   * call this screen awaits — e.g. the Application Test Map journey flow
+   * passes `() => mapService.confirmRun(runtime, run.runId, reviewer)` so
+   * a guided_test journey's real approve+execute call drives the exact
+   * same live-progress/recovery-card UI as the plain CLI plan-review
+   * path, instead of a second, duplicate execution call.
+   */
+  executor?: () => Promise<ExecutionResultSummary>;
 };
 
 /**
@@ -56,6 +65,7 @@ export function LiveExecutionScreen({
   onCycleVerbosity,
   onOpenCommandMode,
   inputActive = true,
+  executor,
 }: LiveExecutionScreenProps): React.ReactElement {
   const plan = run.testPlan;
   const cases = plan?.cases ?? [];
@@ -137,7 +147,7 @@ export function LiveExecutionScreen({
 
     async function run_(): Promise<void> {
       try {
-        const summary = await runExecution(runtime, { plan: run.runId });
+        const summary = await (executor ? executor() : runExecution(runtime, { plan: run.runId }));
         clearInterval(tickTimer);
         if (stoppedRef.current) {
           return;
@@ -234,7 +244,11 @@ export function LiveExecutionScreen({
         ))}
       </Box>
       {activeRecovery ? (
-        <RecoveryCard caseId={activeRecovery.execution.caseId} attempt={activeRecovery.attempt} />
+        <RecoveryCard
+          caseId={activeRecovery.execution.caseId}
+          attempt={activeRecovery.attempt}
+          verbosity={verbosity}
+        />
       ) : null}
       {showEvidence ? (
         <Box

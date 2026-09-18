@@ -5,18 +5,25 @@ import { discoverApplication } from "../services/browser/discover.js";
 import { executeTestCase } from "../services/browser/execute.js";
 import { EnvSecretResolver } from "../services/policy/secret-resolver.js";
 import { SqliteRunRepository, type RunRepository } from "../services/persistence/run-repository.js";
+import {
+  SqliteApplicationTestMapRepository,
+  type ApplicationTestMapRepository,
+} from "../services/persistence/test-map-repository.js";
 import { loadConfig, type NovaConfig } from "../config/index.js";
 import { buildNovaGraph, type NovaGraph } from "../workflow/graph.js";
 
 export type NovaRuntime = {
   config: NovaConfig;
   repository: RunRepository;
+  testMaps: ApplicationTestMapRepository;
   graph: NovaGraph;
 };
 
 export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
   const config = loadConfig(overrides);
   const repository = new SqliteRunRepository(config.databasePath);
+  const testMapDatabasePath = config.databasePath.replace(/\.sqlite$/, "") + "-test-map.sqlite";
+  const testMaps = new SqliteApplicationTestMapRepository(testMapDatabasePath);
   const secretResolver = new EnvSecretResolver();
   const checkpointDatabasePath = config.databasePath.replace(/\.sqlite$/, "") + "-checkpoints.sqlite";
 
@@ -32,7 +39,7 @@ export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
     checkpointDatabasePath,
   });
 
-  return { config, repository, graph };
+  return { config, repository, testMaps, graph };
 }
 
 /**

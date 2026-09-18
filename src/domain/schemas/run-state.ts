@@ -5,6 +5,7 @@ import { DiscoverySnapshotSchema } from "./discovery.js";
 import { ExecutionResultSchema, VerificationResultSchema } from "./execution.js";
 import { ApprovalSchema, TestPlanSchema } from "./plan.js";
 import { TargetManifestSchema } from "./manifest.js";
+import { TestMapRunContextSchema } from "./test-map.js";
 
 export const RunStatusSchema = z.enum([
   "discovering",
@@ -34,6 +35,8 @@ export const TestRunStateSchema = z.object({
   objective: z.string().min(1).optional(),
   discoverySnapshot: DiscoverySnapshotSchema.optional(),
   testPlan: TestPlanSchema.optional(),
+  /** Set only for runs launched from the Application Test Map (nova journey run / TUI); absent for the plain discover/plan/approve/run CLI path. */
+  testMapContext: TestMapRunContextSchema.optional(),
   approval: ApprovalSchema.optional(),
   executionResults: z.array(ExecutionResultSchema).default([]),
   verificationResults: z.array(VerificationResultSchema).default([]),

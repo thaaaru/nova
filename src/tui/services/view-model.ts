@@ -23,7 +23,7 @@ const STAGE_BY_STATUS: Record<TestRunState["status"], TimelineStageId> = {
   blocked: "execute",
 };
 
-const POLICY_MODE_LABEL: Record<string, string> = {
+export const POLICY_MODE_LABEL: Record<string, string> = {
   observe: "Observe (read-only)",
   safe_test: "Safe test (state-changing allowed, approval required)",
   destructive_test: "Destructive test (high-risk cases allowed, approval required)",

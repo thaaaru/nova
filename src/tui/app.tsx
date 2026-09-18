@@ -1,32 +1,60 @@
 import React, { useMemo, useState } from "react";
 import { Box, Text, useApp } from "ink";
 
-import { runApprove, runDiscover, runPlan, runReport } from "../cli/commands.js";
+import { runApprove, runDiscover, runPlan, runReport, type ExecutionResultSummary } from "../cli/commands.js";
 import type { NovaRuntime } from "../cli/context.js";
 import { getCurrentRunId } from "../cli/context.js";
 import type {
+  ApplicationTestMap,
   GuidedSetupInput,
-  NextAction,
   RunEvent,
   TestRunState,
   VerbosityLevel,
 } from "../domain/index.js";
-import { HomeScreen } from "./screens/HomeScreen.js";
+import { confirmRun, getMap, listMaps } from "../services/testmap/map-service.js";
 import { GuidedSetupScreen } from "./screens/GuidedSetupScreen.js";
 import { DiscoveryScreen } from "./screens/DiscoveryScreen.js";
 import { PlanReviewScreen } from "./screens/PlanReviewScreen.js";
 import { LiveExecutionScreen } from "./screens/LiveExecutionScreen.js";
 import { CompletionScreen } from "./screens/CompletionScreen.js";
+import { MapHomeScreen } from "./screens/MapHomeScreen.js";
+import { AreaSelectScreen } from "./screens/AreaSelectScreen.js";
+import { JourneySelectScreen } from "./screens/JourneySelectScreen.js";
+import { TestContextScreen, type SelectedTestContext } from "./screens/TestContextScreen.js";
+import { PreRunSummaryScreen } from "./screens/PreRunSummaryScreen.js";
+import { DescribeTestScreen } from "./screens/DescribeTestScreen.js";
+import { RecommendationsScreen } from "./screens/RecommendationsScreen.js";
+import { ExploreMapScreen } from "./screens/ExploreMapScreen.js";
+import { FailuresScreen } from "./screens/FailuresScreen.js";
 import { CommandBar } from "./command-mode/CommandBar.js";
 import { parseCommand } from "./command-mode/parse-command.js";
 import { toCommandIntent } from "./command-mode/to-intent.js";
 import { buildRunViewModel } from "./services/view-model.js";
+import {
+  buildMapHomeSummary,
+  selectActiveMap,
+  type MapHomeMenuOptionId,
+} from "./services/testmap-view-model.js";
 import { makeEvent } from "./services/make-event.js";
 import { openPathWithOsOpener } from "./services/open-path.js";
 import { loadTuiSettings, saveTuiSettings } from "./theme/settings.js";
 import { palette } from "./theme/palette.js";
 
-type Screen = "home" | "guided-setup" | "discovery" | "plan-review" | "live-execution" | "completion";
+type Screen =
+  | "home"
+  | "guided-setup"
+  | "discovery"
+  | "plan-review"
+  | "live-execution"
+  | "completion"
+  | "map-area-select"
+  | "map-journey-select"
+  | "map-context"
+  | "map-prerun-summary"
+  | "map-describe-test"
+  | "map-recommendations"
+  | "map-explore"
+  | "map-failures";
 
 type AppProps = {
   runtime: NovaRuntime;
@@ -57,11 +85,69 @@ export function App({ runtime }: AppProps): React.ReactElement {
   const [commandValue, setCommandValue] = useState("");
   const [commandError, setCommandError] = useState<string | undefined>(undefined);
   const [commandOutput, setCommandOutput] = useState<string[]>([]);
+  const [mapsVersion, setMapsVersion] = useState(0);
+  const [mapId, setMapId] = useState<string | undefined>(() => selectActiveMap(listMaps(runtime))?.id);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | undefined>(undefined);
+  const [selectedJourneyId, setSelectedJourneyId] = useState<string | undefined>(undefined);
+  const [selectedContext, setSelectedContext] = useState<SelectedTestContext | undefined>(undefined);
+  const [journeyExecutor, setJourneyExecutor] = useState<(() => Promise<ExecutionResultSummary>) | undefined>(
+    undefined,
+  );
 
   const viewModel = useMemo(
     () => buildRunViewModel(run, settings.verbosity, events),
     [run, settings.verbosity, events],
   );
+
+  const activeMap: ApplicationTestMap | undefined = useMemo(
+    () => (mapId ? getMap(runtime, mapId) : selectActiveMap(listMaps(runtime))),
+    [runtime, mapId, mapsVersion],
+  );
+  const mapHomeSummary = useMemo(() => buildMapHomeSummary(activeMap), [activeMap]);
+  const selectedJourney = useMemo(
+    () =>
+      activeMap?.areas.flatMap((area) => area.journeys).find((journey) => journey.id === selectedJourneyId),
+    [activeMap, selectedJourneyId],
+  );
+
+  function refreshMaps(): void {
+    setMapsVersion((tick) => tick + 1);
+  }
+
+  function handleMapHomeSelect(optionId: MapHomeMenuOptionId): void {
+    if (optionId === "command-mode") {
+      setCommandOpen(true);
+      return;
+    }
+    if (optionId === "failures") {
+      setScreen("map-failures");
+      return;
+    }
+    if (optionId === "reports") {
+      const mostRecentRun = runtime.repository.list()[0];
+      if (!mostRecentRun) {
+        setCommandOutput(["No run to report on yet."]);
+        return;
+      }
+      const written = runReport(runtime, { run: mostRecentRun.runId });
+      openPathWithOsOpener(written.htmlPath);
+      setCommandOutput([`HTML report: ${written.htmlPath}`]);
+      return;
+    }
+    if (!activeMap) {
+      setCommandOutput(["No application test map yet — run `nova map discover` first."]);
+      return;
+    }
+    if (optionId === "test-area") {
+      setScreen("map-area-select");
+    } else if (optionId === "describe-test") {
+      setScreen("map-describe-test");
+    } else if (optionId === "recommendations") {
+      setScreen("map-recommendations");
+    } else if (optionId === "explore-map") {
+      setScreen("map-explore");
+    }
+  }
 
   function log(
     message: string,
@@ -90,11 +176,6 @@ export function App({ runtime }: AppProps): React.ReactElement {
     const updated = runtime.repository.get(runId);
     setRun(updated);
     return updated;
-  }
-
-  function handleNextAction(action: NextAction): void {
-    setCommandValue(action.command.replace(/^:/, ""));
-    setCommandOpen(true);
   }
 
   function handleGuidedSetupSubmit(input: GuidedSetupInput): void {
@@ -238,19 +319,115 @@ export function App({ runtime }: AppProps): React.ReactElement {
   return (
     <Box flexDirection="column">
       {screen === "home" ? (
-        <HomeScreen
-          viewModel={viewModel}
-          animationEnabled={settings.animation}
-          onSelectAction={handleNextAction}
-          onOpenGuidedSetup={() => {
-            setGuidedSetupInitial(undefined);
-            setScreen("guided-setup");
-          }}
-          onOpenVerbosity={cycleVerbosity}
-          onOpenCommandMode={() => setCommandOpen(true)}
+        <MapHomeScreen
+          summary={mapHomeSummary}
+          currentRunViewModel={viewModel.runId ? viewModel : undefined}
+          onSelect={handleMapHomeSelect}
           onQuit={exit}
           inputActive={!commandOpen}
         />
+      ) : null}
+
+      {screen === "map-area-select" && activeMap ? (
+        <AreaSelectScreen
+          map={activeMap}
+          onSelect={(areaId) => {
+            setMapId(activeMap.id);
+            setSelectedAreaId(areaId);
+            setScreen("map-journey-select");
+          }}
+          onBack={() => setScreen("home")}
+        />
+      ) : null}
+
+      {screen === "map-journey-select" && activeMap && selectedAreaId ? (
+        <JourneySelectScreen
+          map={activeMap}
+          areaId={selectedAreaId}
+          onSelect={(journeyId) => {
+            setSelectedJourneyId(journeyId);
+            setScreen("map-context");
+          }}
+          onBack={() => setScreen("map-area-select")}
+        />
+      ) : null}
+
+      {screen === "map-context" && activeMap && selectedJourney ? (
+        <TestContextScreen
+          map={activeMap}
+          journey={selectedJourney}
+          onConfirm={(context) => {
+            setSelectedContext(context);
+            setScreen("map-prerun-summary");
+          }}
+          onBack={() => setScreen("map-journey-select")}
+        />
+      ) : null}
+
+      {screen === "map-prerun-summary" && activeMap && selectedJourney && selectedContext ? (
+        <PreRunSummaryScreen
+          runtime={runtime}
+          map={activeMap}
+          journey={selectedJourney}
+          context={selectedContext}
+          verbosity={settings.verbosity}
+          onQuickRunComplete={(finalRun) => {
+            setRun(finalRun);
+            refreshMaps();
+            setScreen("completion");
+          }}
+          onReadyToConfirm={(runId) => {
+            const staged = runtime.repository.get(runId);
+            if (staged) {
+              setRun(staged);
+              setJourneyExecutor(
+                () => () => confirmRun(runtime, runId, process.env.NOVA_REVIEWER ?? "tui-operator"),
+              );
+              setExecutionPaused(false);
+              setScreen("live-execution");
+            }
+          }}
+          onBack={() => setScreen("map-journey-select")}
+        />
+      ) : null}
+
+      {screen === "map-describe-test" && activeMap ? (
+        <DescribeTestScreen
+          runtime={runtime}
+          map={activeMap}
+          onProceedToMatch={(areaId, journeyId) => {
+            setSelectedAreaId(areaId);
+            setSelectedJourneyId(journeyId);
+            setScreen("map-context");
+          }}
+          onBack={() => setScreen("home")}
+        />
+      ) : null}
+
+      {screen === "map-recommendations" && activeMap ? (
+        <RecommendationsScreen
+          runtime={runtime}
+          map={activeMap}
+          onSelectJourney={(areaId, journeyId) => {
+            setSelectedAreaId(areaId);
+            setSelectedJourneyId(journeyId);
+            setScreen("map-context");
+          }}
+          onBack={() => setScreen("home")}
+        />
+      ) : null}
+
+      {screen === "map-explore" && activeMap ? (
+        <ExploreMapScreen
+          runtime={runtime}
+          map={activeMap}
+          onMapChanged={refreshMaps}
+          onBack={() => setScreen("home")}
+        />
+      ) : null}
+
+      {screen === "map-failures" ? (
+        <FailuresScreen runtime={runtime} onBack={() => setScreen("home")} />
       ) : null}
 
       {screen === "guided-setup" ? (
@@ -307,11 +484,17 @@ export function App({ runtime }: AppProps): React.ReactElement {
           verbosity={settings.verbosity}
           paused={executionPaused}
           onTogglePause={() => setExecutionPaused((value) => !value)}
+          executor={journeyExecutor}
           onComplete={(finalRun) => {
             setRun(finalRun);
+            setJourneyExecutor(undefined);
+            refreshMaps();
             setScreen("completion");
           }}
-          onStop={() => setScreen("home")}
+          onStop={() => {
+            setJourneyExecutor(undefined);
+            setScreen("home");
+          }}
           onCycleVerbosity={cycleVerbosity}
           onOpenCommandMode={() => setCommandOpen(true)}
           inputActive={!commandOpen}

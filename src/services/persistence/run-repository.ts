@@ -18,6 +18,9 @@ export interface RunRepository {
   close(): void;
 }
 
+/** Spec-facing alias — identical interface, same implementation. */
+export type TestRunRepository = RunRepository;
+
 export class SqliteRunRepository implements RunRepository {
   private readonly db: Database.Database;
 

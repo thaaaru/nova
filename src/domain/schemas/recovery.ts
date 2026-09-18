@@ -24,3 +24,19 @@ export const RecoveryAttemptSchema = z.object({
   outcome: RecoveryOutcomeSchema,
 });
 export type RecoveryAttempt = z.infer<typeof RecoveryAttemptSchema>;
+
+/**
+ * The families of alternate-locator strategy the deterministic recovery
+ * agent may try, mirrored here so a UserJourney can declare which ones are
+ * permitted for it (`UserJourney.allowedRecoveryActions`) — a further,
+ * journey-level narrowing of the agent's own fixed strategy order, never
+ * an expansion of it.
+ */
+export const RecoveryActionSchema = z.enum([
+  "role_name_match",
+  "common_role_match",
+  "visible_text_match",
+  "accessible_label_match",
+  "declared_selector_match",
+]);
+export type RecoveryAction = z.infer<typeof RecoveryActionSchema>;
