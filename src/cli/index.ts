@@ -289,6 +289,25 @@ mapCommand
           );
         }
       }
+
+      // Generated here, not left for the operator to assemble: the exact
+      // command to run next for every actionable journey, with the map id
+      // and journey id already filled in.
+      const draftJourneys = map.areas.flatMap((area) =>
+        area.journeys.filter((journey) => journey.status === "draft"),
+      );
+      const approvedJourneys = map.areas.flatMap((area) =>
+        area.journeys.filter((journey) => journey.status === "approved"),
+      );
+      if (draftJourneys.length > 0 || approvedJourneys.length > 0) {
+        process.stdout.write("\nNext (copy/paste):\n");
+        for (const journey of draftJourneys) {
+          process.stdout.write(`  nova journey approve ${journey.id} --map ${map.id} --non-interactive\n`);
+        }
+        for (const journey of approvedJourneys) {
+          process.stdout.write(`  nova journey run ${journey.id} --map ${map.id} --non-interactive\n`);
+        }
+      }
     } finally {
       runtime.repository.close();
     }
@@ -361,6 +380,9 @@ journeyApproveCommand.action(
       const input = JourneyApproveInputSchema.parse(resolved);
       const journey = approveJourney(runtime, input.map, input.journeyId);
       process.stdout.write(`Journey ${journey.id} is now "${journey.status}".\n`);
+      if (journey.status === "approved") {
+        process.stdout.write(`Next: nova journey run ${journey.id} --map ${input.map} --non-interactive\n`);
+      }
     } finally {
       runtime.repository.close();
     }
@@ -449,6 +471,7 @@ journeyRunCommand.action(
         process.stdout.write(
           `${JSON.stringify(classificationCounts(finished?.verificationResults ?? []))}\n`,
         );
+        process.stdout.write(`Next: nova report --run ${prepared.runId} --non-interactive\n`);
       }
     } finally {
       runtime.repository.close();
@@ -469,6 +492,7 @@ journeyCommand
       const result = await confirmRun(runtime, runId, reviewer);
       process.stdout.write(`Run ${result.runId} finished: ${result.status}.\n`);
       process.stdout.write(`${JSON.stringify(result.classificationCounts)}\n`);
+      process.stdout.write(`Next: nova report --run ${result.runId} --non-interactive\n`);
     } finally {
       runtime.repository.close();
     }
