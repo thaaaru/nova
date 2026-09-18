@@ -13,7 +13,7 @@ This MVP is deterministic end to end: **no LLM call is required or made anywhere
 Requires Node.js 22+ (pnpm is bootstrapped automatically via corepack if missing).
 
 ```bash
-git clone git@github.com:thaaaru/nova.git && cd nova && ./install.sh
+git clone https://github.com/thaaaru/nova.git && cd nova && ./install.sh
 ```
 
 Run commands either via the built CLI (`node dist/cli/index.js ...`) or directly against source with `pnpm nova ...` (uses `tsx`, no build step needed while iterating).
