@@ -1,0 +1,13 @@
+node_modules/
+dist/
+data/
+artifacts/
+test-results/
+playwright-report/
+.env
+!.env.example
+.DS_Store
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+/auth/
