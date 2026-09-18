@@ -129,10 +129,19 @@ export function buildDraftMapFromDiscovery(
       areasByName.set(areaId, area);
     }
 
-    area.journeys.push(smokeJourneyForPage(page, areaId));
+    const existingIds = new Set(area.journeys.map((journey) => journey.id));
+    const smokeJourney = smokeJourneyForPage(page, areaId);
+    if (!existingIds.has(smokeJourney.id)) {
+      area.journeys.push(smokeJourney);
+      existingIds.add(smokeJourney.id);
+    }
     page.forms.forEach((_form, formIndex) => {
-      area.journeys.push(formJourneyForPage(page, areaId, formIndex));
-      area.riskLevel = "medium";
+      const formJourney = formJourneyForPage(page, areaId, formIndex);
+      if (!existingIds.has(formJourney.id)) {
+        area.journeys.push(formJourney);
+        existingIds.add(formJourney.id);
+        area.riskLevel = "medium";
+      }
     });
 
     if (page.consoleErrors.length > 0) {

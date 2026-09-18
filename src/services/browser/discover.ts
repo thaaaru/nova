@@ -18,6 +18,22 @@ export type DiscoverOptions = {
 };
 
 /**
+ * Canonicalizes a URL for crawl-dedup purposes: drops the fragment (never
+ * a distinct page) and trims a trailing slash from the path (except the
+ * bare root), so "https://site/" and "https://site" — or "https://site/#top"
+ * — are recognized as the same page instead of each producing its own
+ * discovered page and, downstream, duplicate draft journeys.
+ */
+export function normalizeUrl(raw: string): string {
+  const parsed = new URL(raw);
+  parsed.hash = "";
+  if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
+    parsed.pathname = parsed.pathname.slice(0, -1);
+  }
+  return parsed.toString();
+}
+
+/**
  * A shallow, read-only crawl: visits the base URL and same-scope links
  * found on it (breadth-first, one hop), captures titles/forms/buttons/
  * links/console errors/network endpoints. No clicks, no fills, no form
@@ -33,7 +49,7 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
 
   try {
     const context = await browser.newContext();
-    const queue: string[] = [options.manifest.baseUrl];
+    const queue: string[] = [normalizeUrl(options.manifest.baseUrl)];
     const seen = new Set<string>();
 
     while (queue.length > 0 && pages.length < maxPages) {
@@ -107,7 +123,7 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
           continue;
         }
         try {
-          const resolved = new URL(link.href, page.url()).toString();
+          const resolved = normalizeUrl(new URL(link.href, page.url()).toString());
           if (isDomainAllowed(resolved, options.manifest) && !seen.has(resolved)) {
             queue.push(resolved);
           }
