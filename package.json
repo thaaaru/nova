@@ -16,7 +16,7 @@
     "url": "git+https://github.com/thaaaru/nova.git"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --project tsconfig.build.json && node scripts/harden-licensing.mjs",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -49,7 +49,9 @@
     "@types/node": "^26.5.1",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
+    "esbuild": "^0.28.2",
     "eslint": "^10.10.0",
+    "javascript-obfuscator": "^5.7.0",
     "prettier": "^3.9.6",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
