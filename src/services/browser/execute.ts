@@ -6,6 +6,7 @@ import { chromium, type Page, type Route } from "playwright";
 import type {
   Assertion,
   ExecutionResult,
+  RecoveryAttempt,
   StepResult,
   TargetManifest,
   TestCase,
@@ -13,6 +14,7 @@ import type {
 } from "../../domain/index.js";
 import { isDomainAllowed } from "../policy/scope-policy.js";
 import { resolveIfSecretReference, type SecretResolver } from "../policy/secret-resolver.js";
+import { attemptStepRecovery } from "../recovery/recovery-agent.js";
 
 export type ExecuteCaseOptions = {
   runId: string;
@@ -69,6 +71,7 @@ async function runOnce(
   const consoleLogs: string[] = [];
   const screenshots: string[] = [];
   const stepResults: StepResult[] = [];
+  const recoveryAttempts: RecoveryAttempt[] = [];
   let blockedDomain: string | undefined;
 
   try {
@@ -91,10 +94,42 @@ async function runOnce(
         await runStep(page, step, options.secretResolver);
         stepResults.push({ stepIndex: index, status: "passed", durationMs: Date.now() - stepStart });
       } catch (error) {
+        const failureSummary = error instanceof Error ? error.message : String(error);
+        const recovery = RECOVERABLE_STEP_KINDS.has(step.kind)
+          ? await attemptStepRecovery({
+              page,
+              step,
+              stepIndex: index,
+              failureSummary,
+              budget: options.testCase.recoveryBudget,
+            })
+          : { recovered: false, attempts: [] as RecoveryAttempt[] };
+        recoveryAttempts.push(...recovery.attempts);
+
+        if (recovery.recovered && recovery.usedLocator) {
+          try {
+            await runStep(page, step, options.secretResolver, recovery.usedLocator);
+            stepResults.push({ stepIndex: index, status: "passed", durationMs: Date.now() - stepStart });
+            continue;
+          } catch (retryError) {
+            const retrySummary = retryError instanceof Error ? retryError.message : String(retryError);
+            stepResults.push({
+              stepIndex: index,
+              status: "failed",
+              error: `${failureSummary}; recovery locator also failed: ${retrySummary}`,
+              durationMs: Date.now() - stepStart,
+            });
+            const screenshotPath = join(outputDirectory, `failure-step-${index}.png`);
+            await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+            screenshots.push(screenshotPath);
+            break;
+          }
+        }
+
         stepResults.push({
           stepIndex: index,
           status: "failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: failureSummary,
           durationMs: Date.now() - stepStart,
         });
         const screenshotPath = join(outputDirectory, `failure-step-${index}.png`);
@@ -116,6 +151,7 @@ async function runOnce(
       attempts: attempt,
       stepResults,
       assertionResults,
+      recoveryAttempts,
       screenshots,
       consoleLogs,
       tracePath,
@@ -131,7 +167,12 @@ async function runOnce(
   }
 }
 
-async function runStep(page: Page, step: TestStep, secretResolver: SecretResolver): Promise<void> {
+async function runStep(
+  page: Page,
+  step: TestStep,
+  secretResolver: SecretResolver,
+  locatorOverride?: ReturnType<Page["locator"]>,
+): Promise<void> {
   switch (step.kind) {
     case "navigate":
       if (!step.url) {
@@ -140,18 +181,20 @@ async function runStep(page: Page, step: TestStep, secretResolver: SecretResolve
       await page.goto(step.url, { waitUntil: "load", timeout: step.timeoutMs });
       return;
     case "click":
-      await locate(page, step).click({ timeout: step.timeoutMs });
+      await (locatorOverride ?? locate(page, step)).click({ timeout: step.timeoutMs });
       return;
     case "fill": {
       const value = step.value ? resolveIfSecretReference(step.value, secretResolver) : "";
-      await locate(page, step).fill(value, { timeout: step.timeoutMs });
+      await (locatorOverride ?? locate(page, step)).fill(value, { timeout: step.timeoutMs });
       return;
     }
     case "select":
-      await locate(page, step).selectOption(step.value ?? "", { timeout: step.timeoutMs });
+      await (locatorOverride ?? locate(page, step)).selectOption(step.value ?? "", {
+        timeout: step.timeoutMs,
+      });
       return;
     case "check":
-      await locate(page, step).check({ timeout: step.timeoutMs });
+      await (locatorOverride ?? locate(page, step)).check({ timeout: step.timeoutMs });
       return;
     case "waitForSelector":
       if (!step.selector) {
@@ -169,6 +212,9 @@ async function runStep(page: Page, step: TestStep, secretResolver: SecretResolve
       throw new Error(`Unsupported step kind: ${(step as TestStep).kind}`);
   }
 }
+
+/** Step kinds recovery may retry with an alternate locator; navigation/wait steps never qualify. */
+const RECOVERABLE_STEP_KINDS = new Set<TestStep["kind"]>(["click", "fill", "select", "check"]);
 
 function locate(page: Page, step: TestStep) {
   if (step.selector) {

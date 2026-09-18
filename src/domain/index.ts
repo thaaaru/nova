@@ -4,3 +4,5 @@ export * from "./schemas/plan.js";
 export * from "./schemas/execution.js";
 export * from "./schemas/audit.js";
 export * from "./schemas/run-state.js";
+export * from "./schemas/recovery.js";
+export * from "./schemas/reporting.js";

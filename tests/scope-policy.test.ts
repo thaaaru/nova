@@ -14,6 +14,7 @@ const manifest: TargetManifest = {
   allowedDomains: ["shop.example.test"],
   environment: "staging",
   description: "",
+  runExecutionMode: "safe_test",
   createdAt: new Date().toISOString(),
 };
 
@@ -29,6 +30,7 @@ function makeCase(overrides: Partial<TestCase> = {}): TestCase {
     riskLevel: "low",
     timeoutMs: 30_000,
     retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+    recoveryBudget: 2,
     ...overrides,
   };
 }
@@ -78,17 +80,30 @@ describe("checkCaseScope", () => {
 
 describe("checkExecutionAllowed", () => {
   it("blocks a state-changing case when the plan was never approved", () => {
-    const result = checkExecutionAllowed(makeCase({ executionMode: "state_changing" }), undefined);
+    const result = checkExecutionAllowed(makeCase({ executionMode: "state_changing" }), undefined, manifest);
     expect(result.ok).toBe(false);
   });
 
   it("blocks a read-only case too when the plan was rejected", () => {
-    const result = checkExecutionAllowed(makeCase(), "rejected");
+    const result = checkExecutionAllowed(makeCase(), "rejected", manifest);
     expect(result.ok).toBe(false);
   });
 
   it("allows a state-changing case once the plan is approved", () => {
-    const result = checkExecutionAllowed(makeCase({ executionMode: "state_changing" }), "approved");
+    const result = checkExecutionAllowed(makeCase({ executionMode: "state_changing" }), "approved", manifest);
     expect(result).toEqual({ ok: true });
+  });
+
+  it("blocks any state-changing case in observe mode, even when approved", () => {
+    const observeManifest = { ...manifest, runExecutionMode: "observe" as const };
+    const result = checkExecutionAllowed(
+      makeCase({ executionMode: "state_changing" }),
+      "approved",
+      observeManifest,
+    );
+    expect(result).toEqual({
+      ok: false,
+      violation: { kind: "state_changing_forbidden_in_observe_mode", caseId: "case-1" },
+    });
   });
 });

@@ -36,7 +36,7 @@ export function createExecuteNode(deps: ExecuteDependencies) {
     const auditEvents = [...run.auditEvents];
 
     for (const testCase of run.testPlan.cases) {
-      const executionAllowed = checkExecutionAllowed(testCase, run.approval?.decision);
+      const executionAllowed = checkExecutionAllowed(testCase, run.approval?.decision, run.targetManifest);
       const scopeAllowed = checkCaseScope(testCase, run.targetManifest);
 
       if (!executionAllowed.ok || !scopeAllowed.ok) {
@@ -56,6 +56,7 @@ export function createExecuteNode(deps: ExecuteDependencies) {
           attempts: 0,
           stepResults: [],
           assertionResults: [],
+          recoveryAttempts: [],
           screenshots: [],
           consoleLogs: [],
           startedAt: new Date().toISOString(),

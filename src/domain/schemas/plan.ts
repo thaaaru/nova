@@ -46,6 +46,8 @@ export const TestCaseSchema = z.object({
   riskLevel: RiskLevelSchema,
   timeoutMs: z.number().int().positive().default(60_000),
   retryPolicy: RetryPolicySchema.default({ maxAttempts: 1, backoffMs: 0 }),
+  /** Max deterministic alternate-locator recovery tries per failed step. 0 disables recovery for this case. */
+  recoveryBudget: z.number().int().min(0).max(3).default(2),
 });
 export type TestCase = z.infer<typeof TestCaseSchema>;
 

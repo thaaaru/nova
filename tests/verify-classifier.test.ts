@@ -11,6 +11,7 @@ function baseExecution(overrides: Partial<ExecutionResult> = {}): ExecutionResul
     assertionResults: [
       { kind: "urlContains", expected: "example.test", passed: true, observed: "https://example.test/" },
     ],
+    recoveryAttempts: [],
     screenshots: [],
     consoleLogs: [],
     startedAt: new Date().toISOString(),

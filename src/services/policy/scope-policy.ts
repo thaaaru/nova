@@ -5,7 +5,8 @@ export type PolicyViolation =
   | { kind: "unknown_domain"; domain: string }
   | { kind: "unsafe_execution_mode"; caseId: string; mode: string }
   | { kind: "unapproved_plan" }
-  | { kind: "domain_not_in_manifest"; caseId: string; domain: string };
+  | { kind: "domain_not_in_manifest"; caseId: string; domain: string }
+  | { kind: "state_changing_forbidden_in_observe_mode"; caseId: string };
 
 export type PolicyCheckResult = { ok: true } | { ok: false; violation: PolicyViolation };
 
@@ -66,7 +67,14 @@ export function checkRuntimeUrl(url: string, manifest: TargetManifest): PolicyCh
 export function checkExecutionAllowed(
   testCase: TestCase,
   approvalDecision: "approved" | "rejected" | undefined,
+  manifest: TargetManifest,
 ): PolicyCheckResult {
+  if (manifest.runExecutionMode === "observe" && testCase.executionMode === "state_changing") {
+    return {
+      ok: false,
+      violation: { kind: "state_changing_forbidden_in_observe_mode", caseId: testCase.id },
+    };
+  }
   if (testCase.executionMode === "state_changing" && approvalDecision !== "approved") {
     return {
       ok: false,

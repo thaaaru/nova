@@ -19,6 +19,7 @@ const manifest: TargetManifest = {
   allowedDomains: ["shop.example.test"],
   environment: "local",
   description: "",
+  runExecutionMode: "safe_test",
   createdAt: new Date().toISOString(),
 };
 
@@ -76,6 +77,7 @@ beforeEach(() => {
           assertionResults: [
             { kind: "urlContains", expected: "shop.example.test", passed: true, observed: manifest.baseUrl },
           ],
+          recoveryAttempts: [],
           screenshots: [],
           consoleLogs: [],
           startedAt: new Date().toISOString(),
@@ -141,6 +143,7 @@ describe("Nova graph transitions", () => {
             riskLevel: "low",
             timeoutMs: 30_000,
             retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+            recoveryBudget: 2,
           },
         ],
       },
@@ -174,6 +177,7 @@ describe("Nova graph transitions", () => {
           riskLevel: "medium" as const,
           timeoutMs: 30_000,
           retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+          recoveryBudget: 2,
         },
       ],
     };
@@ -220,6 +224,7 @@ describe("Nova graph transitions", () => {
             riskLevel: "low",
             timeoutMs: 30_000,
             retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+            recoveryBudget: 2,
           },
           {
             id: "out-of-scope-case",
@@ -232,6 +237,7 @@ describe("Nova graph transitions", () => {
             riskLevel: "low",
             timeoutMs: 30_000,
             retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+            recoveryBudget: 2,
           },
         ],
       },

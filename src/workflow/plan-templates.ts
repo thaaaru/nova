@@ -32,11 +32,15 @@ export function generatePlanFromDiscovery(
       riskLevel: "low",
       timeoutMs: 30_000,
       retryPolicy: { maxAttempts: 2, backoffMs: 1_000 },
+      recoveryBudget: 2,
     });
   }
 
   let formCaseCount = 0;
   for (const page of snapshot.pages) {
+    if (manifest.runExecutionMode === "observe") {
+      break;
+    }
     for (const form of page.forms) {
       if (formCaseCount >= MAX_FORM_CASES) {
         break;
@@ -71,6 +75,7 @@ export function generatePlanFromDiscovery(
         riskLevel: "medium",
         timeoutMs: 45_000,
         retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+        recoveryBudget: 2,
       });
     }
   }
@@ -90,6 +95,7 @@ export function generatePlanFromDiscovery(
       riskLevel: "low",
       timeoutMs: 30_000,
       retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+      recoveryBudget: 2,
     });
   }
 

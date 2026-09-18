@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { RecoveryAttemptSchema } from "./recovery.js";
+
 export const StepResultSchema = z.object({
   stepIndex: z.number().int().min(0),
   status: z.enum(["passed", "failed", "skipped"]),
@@ -25,6 +27,7 @@ export const ExecutionResultSchema = z.object({
       observed: z.string().optional(),
     }),
   ),
+  recoveryAttempts: z.array(RecoveryAttemptSchema).default([]),
   screenshots: z.array(z.string()),
   consoleLogs: z.array(z.string()),
   tracePath: z.string().optional(),
