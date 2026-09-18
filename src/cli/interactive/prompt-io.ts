@@ -290,6 +290,11 @@ export function createPromptSession(io: PromptIO = defaultPromptIO): PromptSessi
     io.input.off("data", onData);
     io.input.off("end", onEnd);
     io.input.off("close", onEnd);
+    // A resumed/flowing TTY stream keeps its read handle active and the
+    // event loop alive even with no listeners left on it; pausing it here
+    // is what lets the process exit naturally once the guided flow ends,
+    // instead of leaving the terminal hanging after the last prompt.
+    io.input.pause();
   }
 
   return { line, select, confirm, close };
