@@ -3,14 +3,14 @@ import { mkdirSync, existsSync, copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { Command } from "commander";
+import { Command, Option } from "commander";
 
 import { buildRuntime } from "./context.js";
 import { loadConfig } from "../config/index.js";
 import { runApprove, runDiscover, runExecution, runPlan, runReport } from "./commands.js";
 import { serveMcp } from "../mcp/server.js";
 import { runTui } from "../tui/index.js";
-import type { ApplicationTestMapEnvironment, UserJourney, VerificationResult } from "../domain/index.js";
+import type { UserJourney, VerificationResult } from "../domain/index.js";
 import {
   approveJourney,
   confirmRun,
@@ -23,10 +23,35 @@ import {
   recommendations,
   runJourney,
 } from "../services/testmap/map-service.js";
+import { detectInteractivity, type InteractivityOptions } from "./interactive/interactivity.js";
+import {
+  CancelledInputError,
+  NonInteractiveInputError,
+  resolveInputs,
+} from "./interactive/resolve-inputs.js";
+import { MapDiscoverInputSchema, mapDiscoverResolveConfig } from "./interactive/commands/map-discover.js";
+import {
+  JourneyRunInputSchema,
+  buildJourneyRunFields,
+  journeyRunResolveConfig,
+} from "./interactive/commands/journey-run.js";
+import {
+  JourneyApproveInputSchema,
+  buildJourneyApproveFields,
+  journeyApproveResolveConfig,
+} from "./interactive/commands/journey-approve.js";
+import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./interactive/commands/report.js";
 
 /** Commander's recipe for a repeatable option (e.g. `--fixture a --fixture b`). */
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+/** Added to every guided command; `--interactive` also works when a required value is a positional argument. */
+function withInteractivityOptions(command: Command): Command {
+  return command
+    .addOption(new Option("--interactive", "Force guided review, even when every input is already supplied"))
+    .addOption(new Option("--non-interactive", "Never prompt; fail with every missing input listed at once"));
 }
 
 /** The highest checkpoint risk level on a journey — display-only, mirrors the same precedence map-to-plan.ts uses to pick a case's risk level. */
@@ -151,58 +176,77 @@ program
     }
   });
 
-program
-  .command("report")
-  .description("(Re)generate JSON, JUnit, Markdown, and self-contained HTML reports for a run.")
-  .requiredOption("--run <runId>", "Run id")
-  .action((options: { run: string }) => {
-    const runtime = buildRuntime();
-    try {
-      const written = runReport(runtime, options);
-      process.stdout.write(`JSON:     ${written.jsonPath}\n`);
-      process.stdout.write(`JUnit:    ${written.junitPath}\n`);
-      process.stdout.write(`Markdown: ${written.markdownPath}\n`);
-      process.stdout.write(`HTML:     ${written.htmlPath}\n`);
-    } finally {
-      runtime.repository.close();
-    }
-  });
+const reportCommand = withInteractivityOptions(
+  program
+    .command("report")
+    .description("(Re)generate JSON, JUnit, Markdown, and self-contained HTML reports for a run.")
+    .option("--run <runId>", "Run id"),
+);
+reportCommand.action(async (options: { run?: string; interactive?: boolean; nonInteractive?: boolean }) => {
+  const runtime = buildRuntime();
+  try {
+    const interactivity = detectInteractivity(options as InteractivityOptions);
+    const fields = buildReportFields(runtime);
+    const resolved = await resolveInputs(reportResolveConfig(fields), { run: options.run }, interactivity);
+    const input = ReportInputSchema.parse(resolved);
+    const written = runReport(runtime, { run: input.run });
+    process.stdout.write(`JSON:     ${written.jsonPath}\n`);
+    process.stdout.write(`JUnit:    ${written.junitPath}\n`);
+    process.stdout.write(`Markdown: ${written.markdownPath}\n`);
+    process.stdout.write(`HTML:     ${written.htmlPath}\n`);
+  } finally {
+    runtime.repository.close();
+  }
+});
 
 const mapCommand = program.command("map").description("Manage Application Test Maps.");
 
-mapCommand
-  .command("discover")
-  .description("Crawl a target and draft a new Application Test Map (draft until its journeys are approved).")
-  .requiredOption("--target <url>", "Target application URL")
-  .requiredOption("--name <applicationName>", "Name for the new map's application")
-  .requiredOption("--env <environment>", "local|development|staging|production")
-  .option("--no-headless", "Run the browser headed")
-  .action(
-    async (options: {
-      target: string;
-      name: string;
-      env: ApplicationTestMapEnvironment;
-      headless: boolean;
-    }) => {
-      const runtime = buildRuntime();
-      try {
-        const result = await discoverMap(runtime, {
-          target: options.target,
-          applicationName: options.name,
-          environment: options.env,
-          headless: options.headless,
-        });
-        const journeyCount = result.map.areas.reduce((total, area) => total + area.journeys.length, 0);
-        process.stdout.write(
-          `Map ${result.map.id} drafted: ${result.map.areas.length} area(s), ${journeyCount} draft journey(s).\n`,
-        );
-        process.stdout.write("This map is a draft until a QA engineer reviews and approves its journeys.\n");
-        process.stdout.write(`Next: nova map show ${result.map.id}\n`);
-      } finally {
-        runtime.repository.close();
-      }
-    },
-  );
+const mapDiscoverCommand = withInteractivityOptions(
+  mapCommand
+    .command("discover")
+    .description(
+      "Crawl a target and draft a new Application Test Map (draft until its journeys are approved).",
+    )
+    .option("--target <url>", "Target application URL")
+    .option("--name <applicationName>", "Name for the new map's application")
+    .option("--env <environment>", "local|development|staging|production")
+    .option("--no-headless", "Run the browser headed"),
+);
+mapDiscoverCommand.action(
+  async (options: {
+    target?: string;
+    name?: string;
+    env?: string;
+    headless: boolean;
+    interactive?: boolean;
+    nonInteractive?: boolean;
+  }) => {
+    const runtime = buildRuntime();
+    try {
+      const interactivity = detectInteractivity(options as InteractivityOptions);
+      const resolved = await resolveInputs(
+        mapDiscoverResolveConfig,
+        { target: options.target, name: options.name, env: options.env },
+        interactivity,
+      );
+      const input = MapDiscoverInputSchema.parse(resolved);
+      const result = await discoverMap(runtime, {
+        target: input.target,
+        applicationName: input.name,
+        environment: input.env,
+        headless: options.headless,
+      });
+      const journeyCount = result.map.areas.reduce((total, area) => total + area.journeys.length, 0);
+      process.stdout.write(
+        `Map ${result.map.id} drafted: ${result.map.areas.length} area(s), ${journeyCount} draft journey(s).\n`,
+      );
+      process.stdout.write("This map is a draft until a QA engineer reviews and approves its journeys.\n");
+      process.stdout.write(`Next: nova map show ${result.map.id}\n`);
+    } finally {
+      runtime.repository.close();
+    }
+  },
+);
 
 mapCommand
   .command("list")
@@ -294,19 +338,34 @@ journeyCommand
     }
   });
 
-journeyCommand
-  .command("approve <journeyId>")
-  .description("Approve a journey so it becomes runnable.")
-  .requiredOption("--map <mapId>", "Application Test Map id")
-  .action((journeyId: string, options: { map: string }) => {
+const journeyApproveCommand = withInteractivityOptions(
+  journeyCommand
+    .command("approve [journeyId]")
+    .description("Approve a journey so it becomes runnable.")
+    .option("--map <mapId>", "Application Test Map id"),
+);
+journeyApproveCommand.action(
+  async (
+    journeyId: string | undefined,
+    options: { map?: string; interactive?: boolean; nonInteractive?: boolean },
+  ) => {
     const runtime = buildRuntime();
     try {
-      const journey = approveJourney(runtime, options.map, journeyId);
+      const interactivity = detectInteractivity(options as InteractivityOptions);
+      const fields = buildJourneyApproveFields(runtime);
+      const resolved = await resolveInputs(
+        journeyApproveResolveConfig(fields),
+        { map: options.map, journeyId },
+        interactivity,
+      );
+      const input = JourneyApproveInputSchema.parse(resolved);
+      const journey = approveJourney(runtime, input.map, input.journeyId);
       process.stdout.write(`Journey ${journey.id} is now "${journey.status}".\n`);
     } finally {
       runtime.repository.close();
     }
-  });
+  },
+);
 
 // quick_test journeys execute immediately (Nova's own "system:quick_test_policy"
 // reviewer confirms them per journey-run-service.ts) and this command prints
@@ -318,48 +377,84 @@ journeyCommand
 // same confirmJourneyRun used by the quick_test path — one explicit human
 // confirmation step, consistent with how startJourneyRun already treats the
 // two mode families differently.
-journeyCommand
-  .command("run <journeyId>")
-  .description(
-    "Run a journey. quick_test executes immediately; guided_test/controlled_test stage for confirmation.",
-  )
-  .requiredOption("--map <mapId>", "Application Test Map id")
-  .requiredOption("--env <environment>", "Environment to run against")
-  .option("--persona <personaId>", "Persona id to run as")
-  .option("--fixture <fixtureId>", "Fixture id required by the journey (repeatable)", collect, [] as string[])
-  .action(
-    async (journeyId: string, options: { map: string; env: string; persona?: string; fixture: string[] }) => {
-      const runtime = buildRuntime();
-      try {
-        const prepared = await runJourney(runtime, {
-          mapId: options.map,
-          journeyId,
-          environment: options.env,
-          personaId: options.persona,
-          fixtureIds: options.fixture,
-        });
-        if (prepared.status === "awaiting_approval") {
+const journeyRunCommand = withInteractivityOptions(
+  journeyCommand
+    .command("run [journeyId]")
+    .description(
+      "Run a journey. quick_test executes immediately; guided_test/controlled_test stage for confirmation.",
+    )
+    .option("--map <mapId>", "Application Test Map id")
+    .option("--env <environment>", "Environment to run against")
+    .option("--persona <personaId>", "Persona id to run as")
+    .option(
+      "--fixture <fixtureId>",
+      "Fixture id required by the journey (repeatable)",
+      collect,
+      [] as string[],
+    ),
+);
+journeyRunCommand.action(
+  async (
+    journeyId: string | undefined,
+    options: {
+      map?: string;
+      env?: string;
+      persona?: string;
+      fixture: string[];
+      interactive?: boolean;
+      nonInteractive?: boolean;
+    },
+  ) => {
+    const runtime = buildRuntime();
+    try {
+      const interactivity = detectInteractivity(options as InteractivityOptions);
+      const fields = buildJourneyRunFields(runtime);
+      const resolved = await resolveInputs(
+        journeyRunResolveConfig(fields),
+        { map: options.map, journeyId, env: options.env },
+        interactivity,
+      );
+      const input = JourneyRunInputSchema.parse(resolved);
+      const journey = listJourneys(runtime, input.map).find((candidate) => candidate.id === input.journeyId);
+      if (!journey) {
+        throw new Error(`Unknown journey: ${input.journeyId}`);
+      }
+      // A journey's required persona/fixtures are intrinsic, not a free choice (see
+      // TestContextScreen.tsx in the TUI) — auto-fill them here exactly as the TUI
+      // does, rather than making an operator retype what the journey already declares.
+      const personaId =
+        options.persona ??
+        (journey.requiredPersonaIds.length === 1 ? journey.requiredPersonaIds[0] : undefined);
+      const fixtureIds = options.fixture.length > 0 ? options.fixture : journey.requiredFixtureIds;
+      const prepared = await runJourney(runtime, {
+        mapId: input.map,
+        journeyId: input.journeyId,
+        environment: input.env,
+        personaId,
+        fixtureIds,
+      });
+      if (prepared.status === "awaiting_approval") {
+        process.stdout.write(
+          `Run ${prepared.runId} staged for review (${prepared.mode}): ${prepared.cases.length} case(s).\n`,
+        );
+        for (const testCase of prepared.cases) {
           process.stdout.write(
-            `Run ${prepared.runId} staged for review (${prepared.mode}): ${prepared.cases.length} case(s).\n`,
-          );
-          for (const testCase of prepared.cases) {
-            process.stdout.write(
-              `  [${testCase.riskLevel}/${testCase.executionMode}] ${testCase.id}: ${testCase.title}\n`,
-            );
-          }
-          process.stdout.write(`Next: nova journey confirm ${prepared.runId} --reviewer <name>\n`);
-        } else {
-          const finished = runtime.repository.get(prepared.runId);
-          process.stdout.write(`Run ${prepared.runId} finished: ${prepared.status} (${prepared.mode}).\n`);
-          process.stdout.write(
-            `${JSON.stringify(classificationCounts(finished?.verificationResults ?? []))}\n`,
+            `  [${testCase.riskLevel}/${testCase.executionMode}] ${testCase.id}: ${testCase.title}\n`,
           );
         }
-      } finally {
-        runtime.repository.close();
+        process.stdout.write(`Next: nova journey confirm ${prepared.runId} --reviewer <name>\n`);
+      } else {
+        const finished = runtime.repository.get(prepared.runId);
+        process.stdout.write(`Run ${prepared.runId} finished: ${prepared.status} (${prepared.mode}).\n`);
+        process.stdout.write(
+          `${JSON.stringify(classificationCounts(finished?.verificationResults ?? []))}\n`,
+        );
       }
-    },
-  );
+    } finally {
+      runtime.repository.close();
+    }
+  },
+);
 
 journeyCommand
   .command("confirm <runId>")
@@ -447,6 +542,15 @@ program
   });
 
 program.parseAsync().catch((error: unknown) => {
+  if (error instanceof CancelledInputError) {
+    process.stdout.write("Cancelled.\n");
+    return;
+  }
+  if (error instanceof NonInteractiveInputError) {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });

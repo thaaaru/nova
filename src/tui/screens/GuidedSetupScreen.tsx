@@ -4,8 +4,8 @@ import TextInput from "ink-text-input";
 import SelectInput from "ink-select-input";
 
 import type { GuidedSetupInput, RunExecutionMode } from "../../domain/index.js";
+import { normalizeTargetUrl } from "../../services/testmap/discover-input-rules.js";
 import { palette } from "../theme/palette.js";
-
 type Step = "projectName" | "environment" | "targetUrl" | "allowedDomains" | "runExecutionMode" | "objective";
 
 const STEPS: Step[] = [
@@ -37,12 +37,8 @@ function validateStep(step: Step, value: string): string | undefined {
     return value.trim().length === 0 ? "This field cannot be empty." : undefined;
   }
   if (step === "targetUrl") {
-    try {
-      new URL(value);
-      return undefined;
-    } catch {
-      return "Enter a valid URL, e.g. https://staging.example.com";
-    }
+    const normalized = normalizeTargetUrl(value);
+    return normalized.ok ? undefined : normalized.error;
   }
   if (step === "allowedDomains") {
     const domains = value
