@@ -24,6 +24,7 @@ import {
   runJourney,
 } from "../services/testmap/map-service.js";
 import { detectInteractivity, type InteractivityOptions } from "./interactive/interactivity.js";
+import { createPromptSession, defaultPromptIO, isInteractiveTTY } from "./interactive/prompt-io.js";
 import {
   CancelledInputError,
   NonInteractiveInputError,
@@ -309,6 +310,86 @@ mapCommand
         }
       }
     } finally {
+      runtime.repository.close();
+    }
+  });
+
+program
+  .command("wizard <mapId>")
+  .description(
+    "Walk an Application Test Map end to end: approve, run, confirm, and report every actionable journey. Nothing to copy or paste.",
+  )
+  .option("--reviewer <name>", "Reviewer identity recorded for guided_test/controlled_test confirmations")
+  .option("--non-interactive", "Run every step immediately with no confirmation prompts")
+  .action(async (mapId: string, options: { reviewer?: string; nonInteractive?: boolean }) => {
+    const runtime = buildRuntime();
+    const io = defaultPromptIO;
+    const auto = Boolean(options.nonInteractive) || !isInteractiveTTY(io);
+    const session = auto ? undefined : createPromptSession(io);
+    try {
+      const map = getMap(runtime, mapId);
+      if (!map) {
+        throw new Error(`Unknown application test map: ${mapId}`);
+      }
+      const reviewer = options.reviewer ?? process.env.NOVA_REVIEWER ?? "cli-operator";
+      const actionable = listJourneys(runtime, mapId).filter(
+        (journey) => journey.status === "draft" || journey.status === "approved",
+      );
+      if (actionable.length === 0) {
+        process.stdout.write(
+          `Nothing to do: ${map.applicationName} has no draft or approved journeys left to run.\n`,
+        );
+        return;
+      }
+      const reportRunIds: string[] = [];
+      for (const journey of actionable) {
+        let current = journey;
+        if (current.status === "draft") {
+          if (session && !(await session.confirm(`Approve "${current.name}" (${current.id})?`))) {
+            process.stdout.write(`Skipped ${current.id} (left as draft).\n`);
+            continue;
+          }
+          current = approveJourney(runtime, mapId, current.id);
+          process.stdout.write(`Approved ${current.id}.\n`);
+        }
+        if (session && !(await session.confirm(`Run "${current.name}" (${current.id})?`))) {
+          process.stdout.write(`Skipped ${current.id} (not run).\n`);
+          continue;
+        }
+        // Persona/fixtures are intrinsic to the journey, not a free choice — same
+        // auto-fill `nova journey run` already applies (see TestContextScreen.tsx).
+        const prepared = await runJourney(runtime, {
+          mapId,
+          journeyId: current.id,
+          environment: map.environment,
+          personaId: current.requiredPersonaIds.length === 1 ? current.requiredPersonaIds[0] : undefined,
+          fixtureIds: current.requiredFixtureIds,
+        });
+        if (prepared.status === "awaiting_approval") {
+          process.stdout.write(
+            `Run ${prepared.runId} staged for review (${prepared.mode}): ${prepared.cases.length} case(s).\n`,
+          );
+          if (session && !(await session.confirm(`Confirm run ${prepared.runId} as "${reviewer}"?`))) {
+            process.stdout.write(`Skipped confirming ${prepared.runId}.\n`);
+            continue;
+          }
+          const result = await confirmRun(runtime, prepared.runId, reviewer);
+          process.stdout.write(`Run ${result.runId} finished: ${result.status}.\n`);
+          process.stdout.write(`${JSON.stringify(result.classificationCounts)}\n`);
+        } else {
+          process.stdout.write(`Run ${prepared.runId} finished: ${prepared.status} (${prepared.mode}).\n`);
+        }
+        reportRunIds.push(prepared.runId);
+      }
+      for (const runId of reportRunIds) {
+        const written = runReport(runtime, { run: runId });
+        process.stdout.write(`Report for ${runId}: ${written.htmlPath}\n`);
+      }
+      process.stdout.write(
+        `\nWizard complete: ${reportRunIds.length} journey run(s) executed and reported for ${map.applicationName}.\n`,
+      );
+    } finally {
+      session?.close();
       runtime.repository.close();
     }
   });
