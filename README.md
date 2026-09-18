@@ -38,8 +38,9 @@ pnpm nova run --plan <runId>
 # against policy immediately before it runs, not just at approval time
 
 pnpm nova report --run <runId>
-# writes report.json, junit.xml, and report.md, each finding linked to its
-# screenshot/trace evidence
+# writes report.json, junit.xml, report.md, and a self-contained,
+# offline report.html (no external CSS/JS/fonts), each finding linked
+# to its screenshot/trace evidence
 ```
 
 `--run`/`--plan` are optional after `discover` — Nova remembers the most recently discovered run as a convenience "current run" pointer, always overridable by passing the id explicitly. Plan and run identifiers are the same id in this MVP (one plan per run).
@@ -56,6 +57,14 @@ pnpm nova approve --plan <runId> --reviewer demo
 NOVA_SECRET_STANDARD_USER_PASSWORD=correct-horse-battery-staple pnpm nova run --plan <runId>
 pnpm nova report --run <runId>
 ```
+
+## Terminal UI
+
+```bash
+pnpm nova tui
+```
+
+A calm, dark, keyboard-driven guided workflow (Ink + React) for the same discover → plan → approve → execute → verify → report loop, built on top of the identical `src/cli/commands.ts` functions the CLI and MCP server use — the TUI never reimplements discovery, planning, approval, or execution logic. It shows the current stage, the next safe action, live context (target/scope/counts/policy mode), a recovery card whenever the bounded recovery agent (below) intervenes during execution, and an offline HTML report you can open at the end of a run. Press `:` for a command palette (`:discover`, `:plan`, `:approve`, `:run`, `:report`, `:verbosity`, `:animation off`, …), `V` to change verbosity (executive/standard/diagnostic) without restarting, `Q` to quit.
 
 ## MCP integration
 
@@ -99,22 +108,31 @@ docker compose up nova   # long-running `mcp serve` over stdio, if you want the 
 - **Verification is deterministic-first.** `workflow/verify-classifier.ts` classifies every case from its recorded assertion/step evidence alone; a defect candidate is only ever created when a step failed or an assertion mismatched, and a harness limitation (an assertion kind the MVP can't yet evaluate) is reported as `inconclusive`, never as a false defect against the app under test.
 - **Every state transition and policy decision is audited.** Every node appends to `TestRunState.auditEvents` (who/what/when), independent of and never overwritten by anything a model produced.
 - **No arbitrary shell commands anywhere in the execution path.**
+- **Recovery is bounded, deterministic, and never a policy decision.** `services/recovery/recovery-agent.ts` retries a failed step with a fixed, ordered set of alternate _semantic_ locators (role+name, visible text, label) on the same page only — never a different page, domain, or action, never touching secrets or approval, and never an LLM call. It stops after the case's own `recoveryBudget` (0–3, code-reviewed at plan-approval time) and reports exhaustion as a real failure rather than silently retrying forever.
+- **A run-level execution-mode ceiling limits what a plan can even contain.** `TargetManifest.runExecutionMode` (`observe`/`safe_test`/`destructive_test`) is enforced in `checkExecutionAllowed`: `observe` mode rejects every state-changing case outright, even an approved one, and `plan-templates.ts` never generates one in the first place under `observe`.
 
 ## Architecture
 
 ```
 src/
-  cli/         commander CLI: init, discover, plan, approve, run, report, mcp serve
+  cli/         commander CLI: init, discover, plan, approve, run, report, mcp serve, tui
   mcp/         MCP stdio server — thin wrappers around cli/commands.ts
+  tui/         Ink + React terminal UI: app.tsx, screens/, components/, hooks/,
+               command-mode/, theme/, services/ (view-model + verbosity mapping) —
+               calls cli/commands.ts's functions exclusively, no duplicated logic
   workflow/    the LangGraph StateGraph: nodes/, router.ts, graph.ts, state.ts,
                plan-templates.ts (deterministic planning), verify-classifier.ts
-  domain/      Zod schemas for every persisted/graph-state shape (schemas/)
+  domain/      Zod schemas for every persisted/graph-state shape (schemas/),
+               including tui.ts (TUI view models) and reporting.ts (ReportData)
   services/
     browser/     Playwright discover + execute adapters
+    recovery/    bounded, deterministic locator-recovery agent (no LLM)
     persistence/ SqliteRunRepository — swap for Postgres by implementing
                  the same RunRepository interface, nothing else changes
     policy/      scope-policy.ts, secret-resolver.ts
-    reporting/   JSON/JUnit/Markdown generators
+    reporting/   JSON/JUnit/Markdown generators, report-data-adapter.ts
+                 (TestRunState -> ReportData), html-report-generator.ts,
+                 chart-renderer.ts (self-contained inline-SVG charts)
   artifacts/   report-file writing
   config/      the one place environment variables are read
 ```
@@ -134,7 +152,7 @@ pnpm lint
 pnpm format:check
 ```
 
-`tests/scope-policy.test.ts` and `tests/secret-resolver.test.ts` cover policy enforcement in isolation. `tests/graph.test.ts` drives the compiled LangGraph graph end to end with fake discover/execute dependencies (no real Playwright/network) to verify graph transitions: it stops after discover until an objective is supplied, stops at `awaiting_approval` until a decision is recorded, never auto-executes within the same invocation as approval, permanently stops a rejected run, and — for an approved run — executes only in-scope cases while a case declaring an out-of-manifest domain is blocked before it ever reaches Playwright.
+`tests/scope-policy.test.ts` and `tests/secret-resolver.test.ts` cover policy enforcement in isolation, including the `observe`-mode execution ceiling. `tests/recovery-agent.test.ts` drives the recovery agent against a real (headless) Playwright page — budget-zero no-op, a genuine role+name recovery, exhaustion, and refusal to "recover" an ambiguous match. `tests/graph.test.ts` drives the compiled LangGraph graph end to end with fake discover/execute dependencies (no real Playwright/network) to verify graph transitions: it stops after discover until an objective is supplied, stops at `awaiting_approval` until a decision is recorded, never auto-executes within the same invocation as approval, permanently stops a rejected run, and — for an approved run — executes only in-scope cases while a case declaring an out-of-manifest domain is blocked before it ever reaches Playwright. `tests/report-data-adapter.test.ts`, `tests/chart-renderer.test.ts`, and `tests/html-report-generator.test.ts` cover the HTML report pipeline (executive-summary derivation, timeline skip/complete detection, findings, recovery-funnel counts, audit redaction, SVG chart structure, and section-by-section HTML content including correct green/red color restriction). `tests/tui/*` cover the TUI's view-model mapping, command parsing/validation, verbosity filtering, and a rendered-frame assertion on the Home screen at both wide and narrow terminal widths.
 
 ## Extension points left explicit for a later phase
 

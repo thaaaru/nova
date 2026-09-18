@@ -7,11 +7,14 @@ import {
   buildJUnitReport,
   buildMarkdownReport,
 } from "../services/reporting/report-generator.js";
+import { buildReportData } from "../services/reporting/report-data-adapter.js";
+import { buildHtmlReport } from "../services/reporting/html-report-generator.js";
 
 export type WrittenReportPaths = {
   jsonPath: string;
   junitPath: string;
   markdownPath: string;
+  htmlPath: string;
 };
 
 export function writeReportFiles(state: TestRunState, artifactsDirectory: string): WrittenReportPaths {
@@ -21,10 +24,12 @@ export function writeReportFiles(state: TestRunState, artifactsDirectory: string
   const jsonPath = join(outputDirectory, "report.json");
   const junitPath = join(outputDirectory, "junit.xml");
   const markdownPath = join(outputDirectory, "report.md");
+  const htmlPath = join(outputDirectory, "report.html");
 
   writeFileSync(jsonPath, JSON.stringify(buildJsonReport(state), null, 2));
   writeFileSync(junitPath, buildJUnitReport(state));
   writeFileSync(markdownPath, buildMarkdownReport(state));
+  writeFileSync(htmlPath, buildHtmlReport(buildReportData(state)));
 
-  return { jsonPath, junitPath, markdownPath };
+  return { jsonPath, junitPath, markdownPath, htmlPath };
 }

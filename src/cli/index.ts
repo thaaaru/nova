@@ -9,6 +9,7 @@ import { buildRuntime } from "./context.js";
 import { loadConfig } from "../config/index.js";
 import { runApprove, runDiscover, runExecution, runPlan, runReport } from "./commands.js";
 import { serveMcp } from "../mcp/server.js";
+import { runTui } from "../tui/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -115,7 +116,7 @@ program
 
 program
   .command("report")
-  .description("(Re)generate JSON, JUnit, and Markdown reports for a run.")
+  .description("(Re)generate JSON, JUnit, Markdown, and self-contained HTML reports for a run.")
   .requiredOption("--run <runId>", "Run id")
   .action((options: { run: string }) => {
     const runtime = buildRuntime();
@@ -124,6 +125,7 @@ program
       process.stdout.write(`JSON:     ${written.jsonPath}\n`);
       process.stdout.write(`JUnit:    ${written.junitPath}\n`);
       process.stdout.write(`Markdown: ${written.markdownPath}\n`);
+      process.stdout.write(`HTML:     ${written.htmlPath}\n`);
     } finally {
       runtime.repository.close();
     }
@@ -135,6 +137,18 @@ program
   .description("Start Nova's MCP server over stdio, for an IDE/CLI agent to connect to.")
   .action(async () => {
     await serveMcp();
+  });
+
+program
+  .command("tui")
+  .description("Launch Nova's interactive terminal UI.")
+  .action(async () => {
+    const runtime = buildRuntime();
+    try {
+      await runTui(runtime);
+    } finally {
+      runtime.repository.close();
+    }
   });
 
 program.parseAsync().catch((error: unknown) => {

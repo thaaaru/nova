@@ -13,12 +13,13 @@ export default [
     ],
   },
   {
-    files: ["src/**/*.ts", "tests/**/*.ts"],
+    files: ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
+        ecmaFeatures: { jsx: true },
       },
     },
     plugins: {
