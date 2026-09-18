@@ -1,0 +1,25 @@
+services:
+  nova:
+    build: .
+    image: nova:local
+    environment:
+      - NOVA_DATABASE_PATH=/app/data/nova.sqlite
+      - NOVA_ARTIFACTS_DIR=/app/artifacts
+      - NOVA_HEADLESS=true
+      # Secrets are referenced by opaque id (`secret:standard_user_password`)
+      # everywhere in TestPlans; supply the actual values here as
+      # NOVA_SECRET_<ID> env vars, or via Docker/Compose secrets in a real
+      # deployment. Never put a real value in a committed compose file.
+      # - NOVA_SECRET_STANDARD_USER_PASSWORD=
+    volumes:
+      - nova-data:/app/data
+      - nova-artifacts:/app/artifacts
+    # `nova mcp serve` (the default CMD) talks MCP over stdio, so it needs
+    # an attached stdin to be useful; `docker compose run --rm nova <cmd>`
+    # is the normal way to drive discover/plan/approve/run/report instead.
+    stdin_open: true
+    tty: true
+
+volumes:
+  nova-data:
+  nova-artifacts:

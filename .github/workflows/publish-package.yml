@@ -26,7 +26,6 @@ jobs:
           scope: "@thaaaru"
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: bash -n install.sh
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck

@@ -1,0 +1,8 @@
+{
+  "targetId": "demo-app",
+  "baseUrl": "http://localhost:4173/",
+  "allowedDomains": ["localhost"],
+  "environment": "local",
+  "description": "Sample scope manifest for fixtures/demo-app — edit allowedDomains before pointing this at a real target.",
+  "createdAt": "2026-01-01T00:00:00.000Z"
+}

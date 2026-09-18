@@ -1,0 +1,51 @@
+{
+  "id": "sample-checkout-plan",
+  "version": 1,
+  "objective": "Test the checkout flow for a registered customer.",
+  "targetManifestId": "demo-app",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "cases": [
+    {
+      "id": "smoke-home",
+      "title": "Home page loads",
+      "preconditions": [],
+      "steps": [{ "kind": "navigate", "url": "http://localhost:4173/index.html", "timeoutMs": 15000 }],
+      "assertions": [{ "kind": "titleContains", "expected": "Nova Demo Shop" }],
+      "allowedDomains": ["localhost"],
+      "executionMode": "read_only",
+      "riskLevel": "low",
+      "timeoutMs": 30000,
+      "retryPolicy": { "maxAttempts": 2, "backoffMs": 1000 }
+    },
+    {
+      "id": "checkout-registered-customer",
+      "title": "Registered customer signs in and reaches checkout",
+      "preconditions": ["A registered customer account exists"],
+      "steps": [
+        { "kind": "navigate", "url": "http://localhost:4173/login.html", "timeoutMs": 15000 },
+        {
+          "kind": "fill",
+          "selector": "#login-form [name=\"email\"]",
+          "value": "standard_user@example.test",
+          "timeoutMs": 10000
+        },
+        {
+          "kind": "fill",
+          "selector": "#login-form [name=\"password\"]",
+          "value": "secret:standard_user_password",
+          "timeoutMs": 10000
+        },
+        { "kind": "click", "selector": "#login-form [type=\"submit\"]", "timeoutMs": 10000 }
+      ],
+      "assertions": [
+        { "kind": "urlContains", "expected": "checkout.html" },
+        { "kind": "elementVisible", "target": "#confirmation", "expected": "visible" }
+      ],
+      "allowedDomains": ["localhost"],
+      "executionMode": "state_changing",
+      "riskLevel": "medium",
+      "timeoutMs": 45000,
+      "retryPolicy": { "maxAttempts": 1, "backoffMs": 0 }
+    }
+  ]
+}

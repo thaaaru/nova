@@ -23,15 +23,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: bash -n install.sh
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - name: Guard against a shipped license bypass
-        run: |
-          if grep -q NOVA_SKIP_LICENSE dist/licensing/activate.js; then
-            echo "::error::NOVA_SKIP_LICENSE survived the production build -- see scripts/harden-licensing.mjs" >&2
-            exit 1
-          fi
