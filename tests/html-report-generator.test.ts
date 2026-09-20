@@ -96,4 +96,61 @@ describe("buildHtmlReport", () => {
     expect(html).toContain("sha256:deadbeef");
     expect(html).not.toContain("Not yet signed");
   });
+
+  it("renders a sticky section nav with a jump link to every content section", () => {
+    const html = buildHtmlReport(createSampleReportData());
+    expect(html).toContain('class="report-nav"');
+    for (const href of [
+      "#section-executive-summary",
+      "#section-timeline",
+      "#section-charts",
+      "#section-test-cases",
+      "#section-findings",
+      "#section-governance",
+    ]) {
+      expect(html).toContain(`href="${href}"`);
+    }
+    // the sample data has 2 findings — the nav should surface the count
+    expect(html).toContain("Findings (2)");
+  });
+
+  it("shows a computed pass rate in the executive summary, and omits it when there are no tests", () => {
+    const base = createSampleReportData();
+    const html = buildHtmlReport(base);
+    // sample data: 1 passed out of 6 total tests
+    expect(base.executiveSummary.passed).toBe(1);
+    expect(base.executiveSummary.totalTests).toBe(6);
+    expect(html).toContain('<div class="value">17%</div><div class="label">Pass rate</div>');
+
+    const empty = buildHtmlReport({
+      ...base,
+      executiveSummary: { ...base.executiveSummary, totalTests: 0, passed: 0 },
+    });
+    expect(empty).not.toContain("Pass rate");
+  });
+
+  it("cross-links a failed test case to its finding, and the finding back to the test case", () => {
+    const html = buildHtmlReport(createSampleReportData());
+    const caseStart = html.indexOf('id="case-case-failed"');
+    const caseSlice = html.slice(caseStart, caseStart + 800);
+    expect(caseSlice).toContain('href="#finding-case-failed-0"');
+
+    const findingStart = html.indexOf('id="finding-case-failed-0"');
+    expect(findingStart).toBeGreaterThan(-1);
+    const findingSlice = html.slice(findingStart, findingStart + 400);
+    expect(findingSlice).toContain('href="#case-case-failed"');
+  });
+
+  it("assigns unique anchor ids when a test case has more than one finding", () => {
+    const base = createSampleReportData();
+    const [firstFinding] = base.findings;
+    const html = buildHtmlReport({
+      ...base,
+      findings: [firstFinding, { ...firstFinding, title: "A second defect on the same case" }],
+    });
+    expect(html).toContain('id="finding-case-failed-0"');
+    expect(html).toContain('id="finding-case-failed-1"');
+    expect(html).toContain('href="#finding-case-failed-0"');
+    expect(html).toContain('href="#finding-case-failed-1"');
+  });
 });

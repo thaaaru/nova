@@ -32,11 +32,12 @@ export function buildHtmlReport(report: ReportData): string {
     renderHead(report.header),
     "<body>",
     renderHeader(report.header, report.executiveSummary),
+    renderNav(report.findings.length),
     "<main>",
     renderExecutiveSummary(report.executiveSummary),
     renderTimeline(report.timeline),
     renderCharts(report.charts),
-    renderTestCases(report.testCases),
+    renderTestCases(report.testCases, report.findings),
     renderFindings(report.findings),
     renderGovernance(report.governance),
     "</main>",
@@ -45,6 +46,19 @@ export function buildHtmlReport(report: ReportData): string {
     "</body>",
     "</html>",
   ].join("\n");
+}
+
+function renderNav(findingsCount: number): string {
+  const links: Array<{ href: string; label: string }> = [
+    { href: "#section-executive-summary", label: "Summary" },
+    { href: "#section-timeline", label: "Timeline" },
+    { href: "#section-charts", label: "Charts" },
+    { href: "#section-test-cases", label: "Test Cases" },
+    { href: "#section-findings", label: `Findings (${findingsCount})` },
+    { href: "#section-governance", label: "Governance" },
+  ];
+  const items = links.map((link) => `<a href="${link.href}">${escapeHtml(link.label)}</a>`).join("\n");
+  return `<nav class="report-nav">${items}</nav>`;
 }
 
 function escapeHtml(value: string): string {
@@ -195,6 +209,9 @@ header.run-header {
 .outcome-fail { background: var(--red); }
 .outcome-blocked { background: var(--amber); }
 .outcome-neutral { background: var(--cyan); }
+.report-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 20px; flex-wrap: wrap; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--grid); }
+.report-nav a { color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
+.report-nav a:hover { color: var(--cyan); }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 24px; max-width: 1100px; margin: 20px auto 0; }
 .meta-item dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
 .meta-item dd { margin: 2px 0 0; font-size: 15px; }
@@ -202,6 +219,8 @@ header.run-header {
 .stat-card { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 16px; }
 .stat-card .value { font-size: 28px; font-weight: 800; }
 .stat-card .label { color: var(--muted); font-size: 13px; }
+.stat-card-highlight { border-color: var(--cyan); background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), var(--panel)); }
+.stat-card-highlight .value { color: var(--cyan); font-size: 34px; }
 .outcome-statement { font-size: 18px; margin-top: 20px; padding: 16px; background: var(--panel); border-left: 4px solid var(--cyan); border-radius: 6px; }
 .timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .timeline-stage { display: grid; grid-template-columns: 140px auto 1fr; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; padding: 12px 16px; }
@@ -294,6 +313,10 @@ function renderExecutiveSummary(summary: ReportData["executiveSummary"]): string
     { label: "Approval interventions", value: summary.approvalInterventions },
     { label: "Defect candidates", value: summary.defectCandidates },
   ];
+  const passRateCard =
+    summary.totalTests > 0
+      ? `<div class="stat-card stat-card-highlight"><div class="value">${Math.round((summary.passed / summary.totalTests) * 100)}%</div><div class="label">Pass rate</div></div>`
+      : "";
   const cards = stats
     .map(
       (stat) =>
@@ -302,7 +325,7 @@ function renderExecutiveSummary(summary: ReportData["executiveSummary"]): string
     .join("\n");
   return `<section id="section-executive-summary" aria-labelledby="executive-summary-heading">
 <h2 id="executive-summary-heading">Executive Summary</h2>
-<div class="stat-grid">${cards}</div>
+<div class="stat-grid">${passRateCard}${cards}</div>
 <p class="outcome-statement">${escapeHtml(summary.outcomeStatement)}</p>
 </section>`;
 }
@@ -387,7 +410,11 @@ function renderEvidence(evidence: TestCaseDetail["evidence"]): string {
   return `<ul class="evidence-list">${items}</ul>`;
 }
 
-function renderTestCases(testCases: TestCaseDetail[]): string {
+function findingAnchorId(finding: Finding, index: number): string {
+  return `finding-${escapeHtml(finding.caseId)}-${index}`;
+}
+
+function renderTestCases(testCases: TestCaseDetail[], findings: Finding[]): string {
   const cards = testCases
     .map((testCase) => {
       const recoveryCards = testCase.recoveryAttempts.map(renderRecoveryAttempt).join("\n");
@@ -395,6 +422,14 @@ function renderTestCases(testCases: TestCaseDetail[]): string {
         testCase.checkpointsReached.length > 0
           ? testCase.checkpointsReached.map((checkpoint) => escapeHtml(checkpoint)).join(", ")
           : "None reached";
+      const relatedFindingLinks = findings
+        .map((finding, index) => ({ finding, index }))
+        .filter(({ finding }) => finding.caseId === testCase.caseId)
+        .map(
+          ({ finding, index }) =>
+            `<p><a href="#${findingAnchorId(finding, index)}">View finding: ${escapeHtml(finding.title)} &rarr;</a></p>`,
+        )
+        .join("\n");
       return `<article class="case-card" id="case-${escapeHtml(testCase.caseId)}">
 <div class="case-card-head">
 <h3>${escapeHtml(testCase.title)}</h3>
@@ -409,6 +444,7 @@ ${classificationBadge(testCase.classification)}
 <div class="meta-item"><dt>Attempts</dt><dd>${testCase.attempts}</dd></div>
 <div class="meta-item"><dt>Checkpoints reached</dt><dd>${checkpoints}</dd></div>
 </dl>
+${relatedFindingLinks}
 ${recoveryCards ? `<h4>Recovery attempts</h4>${recoveryCards}` : ""}
 <h4>Assertions</h4>
 ${renderAssertions(testCase.assertions)}
@@ -433,14 +469,15 @@ ${cards || `<p class="no-data">No test cases were verified.</p>`}
 
 function renderFindings(findings: Finding[]): string {
   const cards = findings
-    .map((finding) => {
+    .map((finding, index) => {
       const steps = finding.reproductionPath.map((step) => `<li>${escapeHtml(step)}</li>`).join("\n");
-      return `<article class="finding-card" id="finding-${escapeHtml(finding.caseId)}">
+      return `<article class="finding-card" id="${findingAnchorId(finding, index)}">
 <div class="case-card-head">
 <h3>${escapeHtml(finding.title)}</h3>
 ${severityTag(finding.severity)}
 ${defectClassificationTag(finding.classification)}
 </div>
+<p><a href="#case-${escapeHtml(finding.caseId)}">&larr; Back to test case</a></p>
 <p><strong>Observed:</strong> ${escapeHtml(finding.observedBehavior)}</p>
 <p><strong>Expected:</strong> ${escapeHtml(finding.expectedBehavior)}</p>
 <p><strong>Affected checkpoint:</strong> ${escapeHtml(finding.affectedCheckpoint)}</p>
