@@ -1,636 +1,1636 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Nova report — 8f14e45f-ceea-467e-adde-3fb5c8db85fb</title>
-<style>
-:root {
-  color-scheme: dark;
-  --bg: #0a1628;
-  --panel: #0f2138;
-  --grid: #1e3a5f;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
-  --cyan: #38bdf8;
-  --violet: #a78bfa;
-  --green: #34d399;
-  --amber: #fbbf24;
-  --red: #f87171;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-}
-main { max-width: 1100px; margin: 0 auto; padding: 0 24px 64px; }
-section { margin-top: 40px; }
-h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
-h2 { border-bottom: 1px solid var(--grid); padding-bottom: 8px; }
-a { color: var(--cyan); }
-.wordmark { font-size: 22px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan); }
-header.run-header {
-  padding: 32px 24px;
-  background: linear-gradient(180deg, var(--panel), var(--bg));
-  border-bottom: 1px solid var(--grid);
-}
-.run-header-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; max-width: 1100px; margin: 0 auto; }
-.outcome-badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 14px; color: var(--bg); background: var(--badge-color, var(--cyan)); }
-.outcome-pass { background: var(--green); }
-.outcome-fail { background: var(--red); }
-.outcome-blocked { background: var(--amber); }
-.outcome-neutral { background: var(--cyan); }
-.report-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 20px; flex-wrap: wrap; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--grid); }
-.report-nav a { color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
-.report-nav a:hover { color: var(--cyan); }
-.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 24px; max-width: 1100px; margin: 20px auto 0; }
-.meta-item dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-.meta-item dd { margin: 2px 0 0; font-size: 15px; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
-.stat-card { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 16px; }
-.stat-card .value { font-size: 28px; font-weight: 800; }
-.stat-card .label { color: var(--muted); font-size: 13px; }
-.stat-card-highlight { border-color: var(--cyan); background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), var(--panel)); }
-.stat-card-highlight .value { color: var(--cyan); font-size: 34px; }
-.outcome-statement { font-size: 18px; margin-top: 20px; padding: 16px; background: var(--panel); border-left: 4px solid var(--cyan); border-radius: 6px; }
-.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.timeline-stage { display: grid; grid-template-columns: 140px auto 1fr; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; padding: 12px 16px; }
-.stage-status { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; width: fit-content; color: var(--bg); }
-.stage-completed { background: var(--green); }
-.stage-skipped { background: var(--muted); color: var(--bg); }
-.stage-interrupted { background: var(--red); }
-.stage-blocked { background: var(--amber); }
-.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px; }
-.chart-card { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 16px; }
-.chart-card svg { width: 100%; height: auto; }
-.no-data { color: var(--muted); font-style: italic; }
-.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--bg); background: var(--badge-color, var(--cyan)); }
-.badge-passed { background: var(--green); }
-.badge-failed { background: var(--red); }
-.badge-flaky { background: var(--violet); }
-.badge-blocked { background: var(--amber); }
-.badge-inconclusive { background: var(--cyan); }
-.confidence { font-size: 12px; color: var(--muted); }
-.case-card, .finding-card { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
-.case-card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 13px; }
-th { color: var(--muted); font-weight: 600; }
-.pass-cell { color: var(--green); }
-.fail-cell { color: var(--red); }
-.recovery-card { border: 1px dashed var(--violet); border-radius: 8px; padding: 10px 14px; margin: 8px 0; font-size: 13px; }
-.recovery-outcome { font-weight: 700; }
-.recovery-outcome-recovered { color: var(--green); }
-.recovery-outcome-exhausted { color: var(--red); }
-.recovery-outcome-blocked_by_policy { color: var(--amber); }
-.evidence-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.evidence-list li { background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 4px 10px; font-size: 12px; }
-details { margin-top: 10px; }
-details > summary { cursor: pointer; color: var(--cyan); font-size: 13px; }
-pre { background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 12px; overflow-x: auto; font-size: 12px; }
-.tag { display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }
-.tag-product-defect { background: var(--red); color: var(--bg); }
-.tag-flaky-test { background: var(--violet); color: var(--bg); }
-.tag-test-defect { background: var(--amber); color: var(--bg); }
-.tag-infrastructure-failure { background: var(--muted); color: var(--bg); }
-.severity { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-.severity-critical, .severity-high { color: var(--red); }
-.severity-medium { color: var(--amber); }
-.severity-low { color: var(--muted); }
-.toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
-.toolbar button { background: var(--panel); color: var(--text); border: 1px solid var(--grid); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-.toolbar button:hover { border-color: var(--cyan); }
-footer.report-footer { border-top: 1px solid var(--grid); margin-top: 48px; padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
-@media (max-width: 640px) {
-  .timeline-stage { grid-template-columns: 1fr; }
-}
-</style>
-</head>
-<body>
-<header class="run-header" id="section-header">
-<div class="run-header-top">
-<div>
-<div class="wordmark">Nova</div>
-<h1>Test run report</h1>
-</div>
-<span class="outcome-badge outcome-fail" style="--badge-color: #f87171">Failed — failed</span>
-</div>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Run ID</dt><dd>8f14e45f-ceea-467e-adde-3fb5c8db85fb</dd></div>
-<div class="meta-item"><dt>Project</dt><dd>checkout-web</dd></div>
-<div class="meta-item"><dt>Environment</dt><dd>staging</dd></div>
-<div class="meta-item"><dt>Target</dt><dd>https://staging.checkout.example.com</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>safe_test</dd></div>
-<div class="meta-item"><dt>Started</dt><dd>2024-06-01 10:00:00.000 UTC</dd></div>
-<div class="meta-item"><dt>Completed</dt><dd>2024-06-01 10:07:12.000 UTC</dd></div>
-<div class="meta-item"><dt>Total duration</dt><dd>7m 12s</dd></div>
-<div class="meta-item"><dt>Nova version</dt><dd>0.1.0</dd></div>
-<div class="meta-item"><dt>Report schema</dt><dd>v1</dd></div>
-</dl>
-</header>
-<nav class="report-nav"><a href="#section-executive-summary">Summary</a>
-<a href="#section-timeline">Timeline</a>
-<a href="#section-charts">Charts</a>
-<a href="#section-test-cases">Test Cases</a>
-<a href="#section-findings">Findings (2)</a>
-<a href="#section-governance">Governance</a></nav>
-<main>
-<section id="section-executive-summary" aria-labelledby="executive-summary-heading">
-<h2 id="executive-summary-heading">Executive Summary</h2>
-<div class="stat-grid"><div class="stat-card stat-card-highlight"><div class="value">17%</div><div class="label">Pass rate</div></div><div class="stat-card"><div class="value">6</div><div class="label">Total tests</div></div>
-<div class="stat-card"><div class="value">1</div><div class="label">Passed</div></div>
-<div class="stat-card"><div class="value">2</div><div class="label">Failed</div></div>
-<div class="stat-card"><div class="value">1</div><div class="label">Flaky</div></div>
-<div class="stat-card"><div class="value">1</div><div class="label">Blocked</div></div>
-<div class="stat-card"><div class="value">1</div><div class="label">Inconclusive</div></div>
-<div class="stat-card"><div class="value">3</div><div class="label">Recovery attempts</div></div>
-<div class="stat-card"><div class="value">1</div><div class="label">Approval interventions</div></div>
-<div class="stat-card"><div class="value">2</div><div class="label">Defect candidates</div></div></div>
-<p class="outcome-statement">Run completed with 2 confirmed defects out of 6 test cases.</p>
-</section>
-<section id="section-timeline" aria-labelledby="timeline-heading">
-<h2 id="timeline-heading">Workflow Timeline</h2>
-<ol class="timeline"><li class="timeline-stage">
-<strong>Discover</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>45.0s elapsed · completed 2024-06-01 10:00:45.000 UTC</div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nova report — 8f14e45f-ceea-467e-adde-3fb5c8db85fb</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a1628;
+        --panel: #0f2138;
+        --grid: #1e3a5f;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --cyan: #38bdf8;
+        --violet: #a78bfa;
+        --green: #34d399;
+        --amber: #fbbf24;
+        --red: #f87171;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 24px 64px;
+      }
+      section {
+        margin-top: 40px;
+      }
+      h1,
+      h2,
+      h3 {
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        border-bottom: 1px solid var(--grid);
+        padding-bottom: 8px;
+      }
+      a {
+        color: var(--cyan);
+      }
+      .wordmark {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--cyan);
+      }
+      header.run-header {
+        padding: 32px 24px;
+        background: linear-gradient(180deg, var(--panel), var(--bg));
+        border-bottom: 1px solid var(--grid);
+      }
+      .run-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 16px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .outcome-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--bg);
+        background: var(--badge-color, var(--cyan));
+      }
+      .outcome-pass {
+        background: var(--green);
+      }
+      .outcome-fail {
+        background: var(--red);
+      }
+      .outcome-blocked {
+        background: var(--amber);
+      }
+      .outcome-neutral {
+        background: var(--cyan);
+      }
+      .report-nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        padding: 14px 24px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--grid);
+      }
+      .report-nav a {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .report-nav a:hover {
+        color: var(--cyan);
+      }
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px 24px;
+        max-width: 1100px;
+        margin: 20px auto 0;
+      }
+      .meta-item dt {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .meta-item dd {
+        margin: 2px 0 0;
+        font-size: 15px;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+      }
+      .stat-card {
+        background: var(--panel);
+        border: 1px solid var(--grid);
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .stat-card .value {
+        font-size: 28px;
+        font-weight: 800;
+      }
+      .stat-card .label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .stat-card-highlight {
+        border-color: var(--cyan);
+        background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), var(--panel));
+      }
+      .stat-card-highlight .value {
+        color: var(--cyan);
+        font-size: 34px;
+      }
+      .outcome-statement {
+        font-size: 18px;
+        margin-top: 20px;
+        padding: 16px;
+        background: var(--panel);
+        border-left: 4px solid var(--cyan);
+        border-radius: 6px;
+      }
+      .timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .timeline-stage {
+        display: grid;
+        grid-template-columns: 140px auto 1fr;
+        gap: 12px;
+        align-items: center;
+        background: var(--panel);
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        padding: 12px 16px;
+      }
+      .stage-status {
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        width: fit-content;
+        color: var(--bg);
+      }
+      .stage-completed {
+        background: var(--green);
+      }
+      .stage-skipped {
+        background: var(--muted);
+        color: var(--bg);
+      }
+      .stage-interrupted {
+        background: var(--red);
+      }
+      .stage-blocked {
+        background: var(--amber);
+      }
+      .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 24px;
+      }
+      .chart-card {
+        background: var(--panel);
+        border: 1px solid var(--grid);
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .chart-card svg {
+        width: 100%;
+        height: auto;
+      }
+      .no-data {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--bg);
+        background: var(--badge-color, var(--cyan));
+      }
+      .badge-passed {
+        background: var(--green);
+      }
+      .badge-failed {
+        background: var(--red);
+      }
+      .badge-flaky {
+        background: var(--violet);
+      }
+      .badge-blocked {
+        background: var(--amber);
+      }
+      .badge-inconclusive {
+        background: var(--cyan);
+      }
+      .confidence {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .case-card,
+      .finding-card {
+        background: var(--panel);
+        border: 1px solid var(--grid);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+      .case-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--grid);
+        font-size: 13px;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .pass-cell {
+        color: var(--green);
+      }
+      .fail-cell {
+        color: var(--red);
+      }
+      .recovery-card {
+        border: 1px dashed var(--violet);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .recovery-outcome {
+        font-weight: 700;
+      }
+      .recovery-outcome-recovered {
+        color: var(--green);
+      }
+      .recovery-outcome-exhausted {
+        color: var(--red);
+      }
+      .recovery-outcome-blocked_by_policy {
+        color: var(--amber);
+      }
+      .evidence-list {
+        list-style: none;
+        padding: 0;
+        margin: 8px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .evidence-list li {
+        background: var(--bg);
+        border: 1px solid var(--grid);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 12px;
+      }
+      details {
+        margin-top: 10px;
+      }
+      details > summary {
+        cursor: pointer;
+        color: var(--cyan);
+        font-size: 13px;
+      }
+      pre {
+        background: var(--bg);
+        border: 1px solid var(--grid);
+        border-radius: 6px;
+        padding: 12px;
+        overflow-x: auto;
+        font-size: 12px;
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .tag-product-defect {
+        background: var(--red);
+        color: var(--bg);
+      }
+      .tag-flaky-test {
+        background: var(--violet);
+        color: var(--bg);
+      }
+      .tag-test-defect {
+        background: var(--amber);
+        color: var(--bg);
+      }
+      .tag-infrastructure-failure {
+        background: var(--muted);
+        color: var(--bg);
+      }
+      .severity {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .severity-critical,
+      .severity-high {
+        color: var(--red);
+      }
+      .severity-medium {
+        color: var(--amber);
+      }
+      .severity-low {
+        color: var(--muted);
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--grid);
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .toolbar button:hover {
+        border-color: var(--cyan);
+      }
+      footer.report-footer {
+        border-top: 1px solid var(--grid);
+        margin-top: 48px;
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 640px) {
+        .timeline-stage {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="run-header" id="section-header">
+      <div class="run-header-top">
+        <div>
+          <div class="wordmark">Nova</div>
+          <h1>Test run report</h1>
+        </div>
+        <span class="outcome-badge outcome-fail" style="--badge-color: #f87171">Failed — failed</span>
+      </div>
+      <dl class="meta-grid">
+        <div class="meta-item">
+          <dt>Run ID</dt>
+          <dd>8f14e45f-ceea-467e-adde-3fb5c8db85fb</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Project</dt>
+          <dd>checkout-web</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Environment</dt>
+          <dd>staging</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Target</dt>
+          <dd>https://staging.checkout.example.com</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Execution mode</dt>
+          <dd>safe_test</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Started</dt>
+          <dd>2024-06-01 10:00:00.000 UTC</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Completed</dt>
+          <dd>2024-06-01 10:07:12.000 UTC</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Total duration</dt>
+          <dd>7m 12s</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Nova version</dt>
+          <dd>0.1.0</dd>
+        </div>
+        <div class="meta-item">
+          <dt>Report schema</dt>
+          <dd>v1</dd>
+        </div>
+      </dl>
+    </header>
+    <nav class="report-nav">
+      <a href="#section-executive-summary">Summary</a>
+      <a href="#section-timeline">Timeline</a>
+      <a href="#section-charts">Charts</a>
+      <a href="#section-test-cases">Test Cases</a>
+      <a href="#section-findings">Findings (2)</a>
+      <a href="#section-governance">Governance</a>
+    </nav>
+    <main>
+      <section id="section-executive-summary" aria-labelledby="executive-summary-heading">
+        <h2 id="executive-summary-heading">Executive Summary</h2>
+        <div class="stat-grid">
+          <div class="stat-card stat-card-highlight">
+            <div class="value">17%</div>
+            <div class="label">Pass rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">6</div>
+            <div class="label">Total tests</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">1</div>
+            <div class="label">Passed</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">2</div>
+            <div class="label">Failed</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">1</div>
+            <div class="label">Flaky</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">1</div>
+            <div class="label">Blocked</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">1</div>
+            <div class="label">Inconclusive</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">3</div>
+            <div class="label">Recovery attempts</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">1</div>
+            <div class="label">Approval interventions</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">2</div>
+            <div class="label">Defect candidates</div>
+          </div>
+        </div>
+        <p class="outcome-statement">Run completed with 2 confirmed defects out of 6 test cases.</p>
+      </section>
+      <section id="section-timeline" aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading">Workflow Timeline</h2>
+        <ol class="timeline">
+          <li class="timeline-stage">
+            <strong>Discover</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>45.0s elapsed · completed 2024-06-01 10:00:45.000 UTC</div>
+            </div>
+          </li>
+          <li class="timeline-stage">
+            <strong>Plan</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>35.0s elapsed · completed 2024-06-01 10:01:20.000 UTC</div>
+            </div>
+          </li>
+          <li class="timeline-stage">
+            <strong>Approval</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>45.0s elapsed · completed 2024-06-01 10:02:05.000 UTC</div>
+            </div>
+          </li>
+          <li class="timeline-stage">
+            <strong>Execute</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>4m 25s elapsed · completed 2024-06-01 10:06:30.000 UTC</div>
+            </div>
+          </li>
+          <li class="timeline-stage">
+            <strong>Verify</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>35.0s elapsed · completed 2024-06-01 10:07:05.000 UTC</div>
+            </div>
+          </li>
+          <li class="timeline-stage">
+            <strong>Report</strong>
+            <span class="stage-status stage-completed">completed</span>
+            <div>
+              <div>7.0s elapsed · completed 2024-06-01 10:07:12.000 UTC</div>
+            </div>
+          </li>
+        </ol>
+      </section>
+      <section id="section-charts" aria-labelledby="charts-heading">
+        <h2 id="charts-heading">Charts</h2>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <svg
+              viewBox="0 0 420 260"
+              width="420"
+              height="260"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="svg-title svg-desc"
+            >
+              <title id="svg-title">Result distribution</title>
+              <desc id="svg-desc">
+                Result distribution across 6 test cases: Passed 1, Failed 2, Flaky 1, Blocked 1, Inconclusive
+                1.
+              </desc>
+              <rect x="0" y="0" width="420" height="260" fill="#0f2138" rx="12" />
+              <circle
+                cx="130"
+                cy="130"
+                r="90"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="34"
+                stroke-dasharray="94.24777960769379 471.23889803846896"
+                stroke-dashoffset="0"
+                transform="rotate(-90 130 130)"
+                data-classification="passed"
+                data-count="1"
+              />
+              <circle
+                cx="130"
+                cy="130"
+                r="90"
+                fill="none"
+                stroke="#f87171"
+                stroke-width="34"
+                stroke-dasharray="188.49555921538757 376.9911184307752"
+                stroke-dashoffset="-94.24777960769379"
+                transform="rotate(-90 130 130)"
+                data-classification="failed"
+                data-count="2"
+              />
+              <circle
+                cx="130"
+                cy="130"
+                r="90"
+                fill="none"
+                stroke="#a78bfa"
+                stroke-width="34"
+                stroke-dasharray="94.24777960769379 471.23889803846896"
+                stroke-dashoffset="-282.74333882308133"
+                transform="rotate(-90 130 130)"
+                data-classification="flaky"
+                data-count="1"
+              />
+              <circle
+                cx="130"
+                cy="130"
+                r="90"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="34"
+                stroke-dasharray="94.24777960769379 471.23889803846896"
+                stroke-dashoffset="-376.99111843077515"
+                transform="rotate(-90 130 130)"
+                data-classification="blocked"
+                data-count="1"
+              />
+              <circle
+                cx="130"
+                cy="130"
+                r="90"
+                fill="none"
+                stroke="#38bdf8"
+                stroke-width="34"
+                stroke-dasharray="94.24777960769379 471.23889803846896"
+                stroke-dashoffset="-471.23889803846896"
+                transform="rotate(-90 130 130)"
+                data-classification="inconclusive"
+                data-count="1"
+              />
+              <text x="130" y="126" text-anchor="middle" fill="#e2e8f0" font-size="28" font-weight="700">
+                6
+              </text>
+              <text x="130" y="148" text-anchor="middle" fill="#94a3b8" font-size="13">total cases</text>
+              <rect x="280" y="16" width="16" height="16" rx="3" fill="#34d399" />
+              <text x="304" y="29" fill="#e2e8f0" font-size="14">Passed: 1 (17%)</text>
+              <rect x="280" y="56" width="16" height="16" rx="3" fill="#f87171" />
+              <text x="304" y="69" fill="#e2e8f0" font-size="14">Failed: 2 (33%)</text>
+              <rect x="280" y="96" width="16" height="16" rx="3" fill="#a78bfa" />
+              <text x="304" y="109" fill="#e2e8f0" font-size="14">Flaky: 1 (17%)</text>
+              <rect x="280" y="136" width="16" height="16" rx="3" fill="#fbbf24" />
+              <text x="304" y="149" fill="#e2e8f0" font-size="14">Blocked: 1 (17%)</text>
+              <rect x="280" y="176" width="16" height="16" rx="3" fill="#38bdf8" />
+              <text x="304" y="189" fill="#e2e8f0" font-size="14">Inconclusive: 1 (17%)</text>
+            </svg>
+          </div>
+          <div class="chart-card">
+            <svg
+              viewBox="0 0 640 244"
+              width="640"
+              height="244"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="svg-title svg-desc"
+            >
+              <title id="svg-title">Duration by test case</title>
+              <desc id="svg-desc">Duration for 6 test cases, longest 41.0s.</desc>
+              <rect x="0" y="0" width="640" height="244" fill="#0f2138" rx="12" />
+              <text x="0" y="42" fill="#e2e8f0" font-size="13" data-case-id="case-passed">
+                Guest can complete checkout…
+              </text>
+              <rect
+                x="220"
+                y="26"
+                width="149.26829268292684"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-passed"
+                data-duration-ms="18000"
+              />
+              <text x="377.2682926829268" y="42" fill="#94a3b8" font-size="12">18.0s</text>
+              <text x="0" y="76" fill="#e2e8f0" font-size="13" data-case-id="case-failed">
+                Checkout rejects an expired…
+              </text>
+              <rect
+                x="220"
+                y="60"
+                width="186.58536585365854"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-failed"
+                data-duration-ms="22500"
+              />
+              <text x="414.5853658536586" y="76" fill="#94a3b8" font-size="12">22.5s</text>
+              <text x="0" y="110" fill="#e2e8f0" font-size="13" data-case-id="case-recovery-exhausted">
+                Cart quantity stepper updat…
+              </text>
+              <rect
+                x="220"
+                y="94"
+                width="340"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-recovery-exhausted"
+                data-duration-ms="41000"
+              />
+              <text x="568" y="110" fill="#94a3b8" font-size="12">41.0s</text>
+              <text x="0" y="144" fill="#e2e8f0" font-size="13" data-case-id="case-blocked">
+                Admin can issue a refund fr…
+              </text>
+              <rect
+                x="220"
+                y="128"
+                width="33.170731707317074"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-blocked"
+                data-duration-ms="4000"
+              />
+              <text x="261.1707317073171" y="144" fill="#94a3b8" font-size="12">4.0s</text>
+              <text x="0" y="178" fill="#e2e8f0" font-size="13" data-case-id="case-inconclusive">
+                Promo code banner appears o…
+              </text>
+              <rect
+                x="220"
+                y="162"
+                width="78.78048780487805"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-inconclusive"
+                data-duration-ms="9500"
+              />
+              <text x="306.780487804878" y="178" fill="#94a3b8" font-size="12">9.5s</text>
+              <text x="0" y="212" fill="#e2e8f0" font-size="13" data-case-id="case-flaky">
+                Order confirmation email li…
+              </text>
+              <rect
+                x="220"
+                y="196"
+                width="258.7317073170732"
+                height="20"
+                rx="4"
+                fill="#38bdf8"
+                data-case-id="case-flaky"
+                data-duration-ms="31200"
+              />
+              <text x="486.7317073170732" y="212" fill="#94a3b8" font-size="12">31.2s</text>
+            </svg>
+          </div>
+          <div class="chart-card">
+            <svg
+              viewBox="0 0 640 204"
+              width="640"
+              height="204"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="svg-title svg-desc"
+            >
+              <title id="svg-title">Risk level vs outcome</title>
+              <desc id="svg-desc">Risk level versus outcome across 6 test cases.</desc>
+              <rect x="0" y="0" width="640" height="204" fill="#0f2138" rx="12" />
+              <text x="0" y="42" fill="#e2e8f0" font-size="13">High risk</text>
+              <text x="0" y="58" fill="#94a3b8" font-size="11">3 cases</text>
+              <rect
+                x="110"
+                y="28"
+                width="326.66666666666663"
+                height="26"
+                fill="#f87171"
+                data-risk-level="high"
+                data-classification="failed"
+                data-count="2"
+              />
+              <rect
+                x="436.66666666666663"
+                y="28"
+                width="163.33333333333331"
+                height="26"
+                fill="#fbbf24"
+                data-risk-level="high"
+                data-classification="blocked"
+                data-count="1"
+              />
+              <text x="0" y="90" fill="#e2e8f0" font-size="13">Medium risk</text>
+              <text x="0" y="106" fill="#94a3b8" font-size="11">2 cases</text>
+              <rect
+                x="110"
+                y="76"
+                width="163.33333333333331"
+                height="26"
+                fill="#34d399"
+                data-risk-level="medium"
+                data-classification="passed"
+                data-count="1"
+              />
+              <rect
+                x="273.3333333333333"
+                y="76"
+                width="163.33333333333331"
+                height="26"
+                fill="#a78bfa"
+                data-risk-level="medium"
+                data-classification="flaky"
+                data-count="1"
+              />
+              <text x="0" y="138" fill="#e2e8f0" font-size="13">Low risk</text>
+              <text x="0" y="154" fill="#94a3b8" font-size="11">1 case</text>
+              <rect
+                x="110"
+                y="124"
+                width="163.33333333333331"
+                height="26"
+                fill="#38bdf8"
+                data-risk-level="low"
+                data-classification="inconclusive"
+                data-count="1"
+              />
+              <rect x="110" y="178" width="10" height="10" fill="#34d399" />
+              <text x="124" y="188" fill="#94a3b8" font-size="11">Passed</text>
+              <rect x="210" y="178" width="10" height="10" fill="#f87171" />
+              <text x="224" y="188" fill="#94a3b8" font-size="11">Failed</text>
+              <rect x="310" y="178" width="10" height="10" fill="#a78bfa" />
+              <text x="324" y="188" fill="#94a3b8" font-size="11">Flaky</text>
+              <rect x="410" y="178" width="10" height="10" fill="#fbbf24" />
+              <text x="424" y="188" fill="#94a3b8" font-size="11">Blocked</text>
+              <rect x="510" y="178" width="10" height="10" fill="#38bdf8" />
+              <text x="524" y="188" fill="#94a3b8" font-size="11">Inconclusive</text>
+            </svg>
+          </div>
+          <div class="chart-card">
+            <svg
+              viewBox="0 0 560 232"
+              width="560"
+              height="232"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="svg-title svg-desc"
+            >
+              <title id="svg-title">Recovery funnel</title>
+              <desc id="svg-desc">
+                Recovery funnel: Failures detected 4, Recovery attempted 3, Recovered 1, Confirmed defect 2,
+                Blocked 1.
+              </desc>
+              <rect x="0" y="0" width="560" height="232" fill="#0f2138" rx="12" />
+              <text x="0" y="41" fill="#e2e8f0" font-size="13">Failures detected</text>
+              <rect
+                x="190"
+                y="22"
+                width="310"
+                height="24"
+                rx="4"
+                fill="#38bdf8"
+                data-stage="failuresDetected"
+                data-value="4"
+              />
+              <text x="508" y="41" fill="#94a3b8" font-size="12">4</text>
+              <text x="0" y="81" fill="#e2e8f0" font-size="13">Recovery attempted</text>
+              <rect
+                x="190"
+                y="62"
+                width="232.5"
+                height="24"
+                rx="4"
+                fill="#a78bfa"
+                data-stage="recoveryAttempted"
+                data-value="3"
+              />
+              <text x="430.5" y="81" fill="#94a3b8" font-size="12">3</text>
+              <text x="0" y="121" fill="#e2e8f0" font-size="13">Recovered</text>
+              <rect
+                x="190"
+                y="102"
+                width="77.5"
+                height="24"
+                rx="4"
+                fill="#34d399"
+                data-stage="recovered"
+                data-value="1"
+              />
+              <text x="275.5" y="121" fill="#94a3b8" font-size="12">1</text>
+              <text x="0" y="161" fill="#e2e8f0" font-size="13">Confirmed defect</text>
+              <rect
+                x="190"
+                y="142"
+                width="155"
+                height="24"
+                rx="4"
+                fill="#f87171"
+                data-stage="confirmedDefect"
+                data-value="2"
+              />
+              <text x="353" y="161" fill="#94a3b8" font-size="12">2</text>
+              <text x="0" y="201" fill="#e2e8f0" font-size="13">Blocked</text>
+              <rect
+                x="190"
+                y="182"
+                width="77.5"
+                height="24"
+                rx="4"
+                fill="#fbbf24"
+                data-stage="blocked"
+                data-value="1"
+              />
+              <text x="275.5" y="201" fill="#94a3b8" font-size="12">1</text>
+            </svg>
+          </div>
+          <div class="chart-card" id="trend-chart">
+            <svg
+              viewBox="0 0 640 220"
+              width="640"
+              height="220"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="svg-title svg-desc"
+            >
+              <title id="svg-title">Pass/fail trend</title>
+              <desc id="svg-desc">Pass/fail trend across 3 prior runs.</desc>
+              <rect x="0" y="0" width="640" height="220" fill="#0f2138" rx="12" />
+              <line x1="40" y1="180" x2="620" y2="180" stroke="#1e3a5f" stroke-width="1" />
+              <rect
+                x="44"
+                y="73.33333333333334"
+                width="90.66666666666667"
+                height="106.66666666666666"
+                fill="#34d399"
+                data-run-id="run-2024-05-25"
+                data-passed="4"
+              />
+              <rect
+                x="138.66666666666669"
+                y="126.66666666666667"
+                width="90.66666666666667"
+                height="53.33333333333333"
+                fill="#f87171"
+                data-run-id="run-2024-05-25"
+                data-failed="2"
+              />
+              <text x="136.66666666666669" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">
+                2024-05-25
+              </text>
+              <rect
+                x="237.33333333333334"
+                y="46.66666666666666"
+                width="90.66666666666667"
+                height="133.33333333333334"
+                fill="#34d399"
+                data-run-id="run-2024-05-29"
+                data-passed="5"
+              />
+              <rect
+                x="332"
+                y="153.33333333333334"
+                width="90.66666666666667"
+                height="26.666666666666664"
+                fill="#f87171"
+                data-run-id="run-2024-05-29"
+                data-failed="1"
+              />
+              <text x="330" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">2024-05-29</text>
+              <rect
+                x="430.6666666666667"
+                y="153.33333333333334"
+                width="90.66666666666667"
+                height="26.666666666666664"
+                fill="#34d399"
+                data-run-id="run-2024-06-01"
+                data-passed="1"
+              />
+              <rect
+                x="525.3333333333334"
+                y="126.66666666666667"
+                width="90.66666666666667"
+                height="53.33333333333333"
+                fill="#f87171"
+                data-run-id="run-2024-06-01"
+                data-failed="2"
+              />
+              <text x="523.3333333333334" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">
+                2024-06-01
+              </text>
+            </svg>
+          </div>
+        </div>
+      </section>
+      <section id="section-test-cases" aria-labelledby="test-cases-heading">
+        <h2 id="test-cases-heading">Test Case Detail</h2>
+        <div class="toolbar">
+          <button type="button" data-action="expand-all">Expand all raw results</button>
+          <button type="button" data-action="collapse-all">Collapse all raw results</button>
+        </div>
+        <article class="case-card" id="case-case-passed">
+          <div class="case-card-head">
+            <h3>Guest can complete checkout with a valid card</h3>
+            <span class="badge badge-passed" style="--badge-color: #34d399">Passed</span>
+          </div>
+          <p>Guest can complete checkout with a valid card</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">high</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>medium</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>state_changing</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>18.0s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>1</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>step 0, step 1, step 2, step 3</dd>
+            </div>
+          </dl>
 
-</div>
-</li>
-<li class="timeline-stage">
-<strong>Plan</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>35.0s elapsed · completed 2024-06-01 10:01:20.000 UTC</div>
-
-</div>
-</li>
-<li class="timeline-stage">
-<strong>Approval</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>45.0s elapsed · completed 2024-06-01 10:02:05.000 UTC</div>
-
-</div>
-</li>
-<li class="timeline-stage">
-<strong>Execute</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>4m 25s elapsed · completed 2024-06-01 10:06:30.000 UTC</div>
-
-</div>
-</li>
-<li class="timeline-stage">
-<strong>Verify</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>35.0s elapsed · completed 2024-06-01 10:07:05.000 UTC</div>
-
-</div>
-</li>
-<li class="timeline-stage">
-<strong>Report</strong>
-<span class="stage-status stage-completed">completed</span>
-<div>
-<div>7.0s elapsed · completed 2024-06-01 10:07:12.000 UTC</div>
-
-</div>
-</li></ol>
-</section>
-<section id="section-charts" aria-labelledby="charts-heading">
-<h2 id="charts-heading">Charts</h2>
-<div class="chart-grid">
-<div class="chart-card"><svg viewBox="0 0 420 260" width="420" height="260" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
-<title id="svg-title">Result distribution</title>
-<desc id="svg-desc">Result distribution across 6 test cases: Passed 1, Failed 2, Flaky 1, Blocked 1, Inconclusive 1.</desc>
-<rect x="0" y="0" width="420" height="260" fill="#0f2138" rx="12" />
-<circle cx="130" cy="130" r="90" fill="none" stroke="#34d399" stroke-width="34" stroke-dasharray="94.24777960769379 471.23889803846896" stroke-dashoffset="0" transform="rotate(-90 130 130)" data-classification="passed" data-count="1" />
-<circle cx="130" cy="130" r="90" fill="none" stroke="#f87171" stroke-width="34" stroke-dasharray="188.49555921538757 376.9911184307752" stroke-dashoffset="-94.24777960769379" transform="rotate(-90 130 130)" data-classification="failed" data-count="2" />
-<circle cx="130" cy="130" r="90" fill="none" stroke="#a78bfa" stroke-width="34" stroke-dasharray="94.24777960769379 471.23889803846896" stroke-dashoffset="-282.74333882308133" transform="rotate(-90 130 130)" data-classification="flaky" data-count="1" />
-<circle cx="130" cy="130" r="90" fill="none" stroke="#fbbf24" stroke-width="34" stroke-dasharray="94.24777960769379 471.23889803846896" stroke-dashoffset="-376.99111843077515" transform="rotate(-90 130 130)" data-classification="blocked" data-count="1" />
-<circle cx="130" cy="130" r="90" fill="none" stroke="#38bdf8" stroke-width="34" stroke-dasharray="94.24777960769379 471.23889803846896" stroke-dashoffset="-471.23889803846896" transform="rotate(-90 130 130)" data-classification="inconclusive" data-count="1" />
-<text x="130" y="126" text-anchor="middle" fill="#e2e8f0" font-size="28" font-weight="700">6</text><text x="130" y="148" text-anchor="middle" fill="#94a3b8" font-size="13">total cases</text>
-<rect x="280" y="16" width="16" height="16" rx="3" fill="#34d399" />
-<text x="304" y="29" fill="#e2e8f0" font-size="14">Passed: 1 (17%)</text>
-<rect x="280" y="56" width="16" height="16" rx="3" fill="#f87171" />
-<text x="304" y="69" fill="#e2e8f0" font-size="14">Failed: 2 (33%)</text>
-<rect x="280" y="96" width="16" height="16" rx="3" fill="#a78bfa" />
-<text x="304" y="109" fill="#e2e8f0" font-size="14">Flaky: 1 (17%)</text>
-<rect x="280" y="136" width="16" height="16" rx="3" fill="#fbbf24" />
-<text x="304" y="149" fill="#e2e8f0" font-size="14">Blocked: 1 (17%)</text>
-<rect x="280" y="176" width="16" height="16" rx="3" fill="#38bdf8" />
-<text x="304" y="189" fill="#e2e8f0" font-size="14">Inconclusive: 1 (17%)</text>
-</svg></div>
-<div class="chart-card"><svg viewBox="0 0 640 244" width="640" height="244" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
-<title id="svg-title">Duration by test case</title>
-<desc id="svg-desc">Duration for 6 test cases, longest 41.0s.</desc>
-<rect x="0" y="0" width="640" height="244" fill="#0f2138" rx="12" />
-<text x="0" y="42" fill="#e2e8f0" font-size="13" data-case-id="case-passed">Guest can complete checkout…</text>
-<rect x="220" y="26" width="149.26829268292684" height="20" rx="4" fill="#38bdf8" data-case-id="case-passed" data-duration-ms="18000" />
-<text x="377.2682926829268" y="42" fill="#94a3b8" font-size="12">18.0s</text>
-<text x="0" y="76" fill="#e2e8f0" font-size="13" data-case-id="case-failed">Checkout rejects an expired…</text>
-<rect x="220" y="60" width="186.58536585365854" height="20" rx="4" fill="#38bdf8" data-case-id="case-failed" data-duration-ms="22500" />
-<text x="414.5853658536586" y="76" fill="#94a3b8" font-size="12">22.5s</text>
-<text x="0" y="110" fill="#e2e8f0" font-size="13" data-case-id="case-recovery-exhausted">Cart quantity stepper updat…</text>
-<rect x="220" y="94" width="340" height="20" rx="4" fill="#38bdf8" data-case-id="case-recovery-exhausted" data-duration-ms="41000" />
-<text x="568" y="110" fill="#94a3b8" font-size="12">41.0s</text>
-<text x="0" y="144" fill="#e2e8f0" font-size="13" data-case-id="case-blocked">Admin can issue a refund fr…</text>
-<rect x="220" y="128" width="33.170731707317074" height="20" rx="4" fill="#38bdf8" data-case-id="case-blocked" data-duration-ms="4000" />
-<text x="261.1707317073171" y="144" fill="#94a3b8" font-size="12">4.0s</text>
-<text x="0" y="178" fill="#e2e8f0" font-size="13" data-case-id="case-inconclusive">Promo code banner appears o…</text>
-<rect x="220" y="162" width="78.78048780487805" height="20" rx="4" fill="#38bdf8" data-case-id="case-inconclusive" data-duration-ms="9500" />
-<text x="306.780487804878" y="178" fill="#94a3b8" font-size="12">9.5s</text>
-<text x="0" y="212" fill="#e2e8f0" font-size="13" data-case-id="case-flaky">Order confirmation email li…</text>
-<rect x="220" y="196" width="258.7317073170732" height="20" rx="4" fill="#38bdf8" data-case-id="case-flaky" data-duration-ms="31200" />
-<text x="486.7317073170732" y="212" fill="#94a3b8" font-size="12">31.2s</text>
-</svg></div>
-<div class="chart-card"><svg viewBox="0 0 640 204" width="640" height="204" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
-<title id="svg-title">Risk level vs outcome</title>
-<desc id="svg-desc">Risk level versus outcome across 6 test cases.</desc>
-<rect x="0" y="0" width="640" height="204" fill="#0f2138" rx="12" />
-<text x="0" y="42" fill="#e2e8f0" font-size="13">High risk</text>
-<text x="0" y="58" fill="#94a3b8" font-size="11">3 cases</text>
-<rect x="110" y="28" width="326.66666666666663" height="26" fill="#f87171" data-risk-level="high" data-classification="failed" data-count="2" />
-<rect x="436.66666666666663" y="28" width="163.33333333333331" height="26" fill="#fbbf24" data-risk-level="high" data-classification="blocked" data-count="1" />
-<text x="0" y="90" fill="#e2e8f0" font-size="13">Medium risk</text>
-<text x="0" y="106" fill="#94a3b8" font-size="11">2 cases</text>
-<rect x="110" y="76" width="163.33333333333331" height="26" fill="#34d399" data-risk-level="medium" data-classification="passed" data-count="1" />
-<rect x="273.3333333333333" y="76" width="163.33333333333331" height="26" fill="#a78bfa" data-risk-level="medium" data-classification="flaky" data-count="1" />
-<text x="0" y="138" fill="#e2e8f0" font-size="13">Low risk</text>
-<text x="0" y="154" fill="#94a3b8" font-size="11">1 case</text>
-<rect x="110" y="124" width="163.33333333333331" height="26" fill="#38bdf8" data-risk-level="low" data-classification="inconclusive" data-count="1" />
-<rect x="110" y="178" width="10" height="10" fill="#34d399" /><text x="124" y="188" fill="#94a3b8" font-size="11">Passed</text>
-<rect x="210" y="178" width="10" height="10" fill="#f87171" /><text x="224" y="188" fill="#94a3b8" font-size="11">Failed</text>
-<rect x="310" y="178" width="10" height="10" fill="#a78bfa" /><text x="324" y="188" fill="#94a3b8" font-size="11">Flaky</text>
-<rect x="410" y="178" width="10" height="10" fill="#fbbf24" /><text x="424" y="188" fill="#94a3b8" font-size="11">Blocked</text>
-<rect x="510" y="178" width="10" height="10" fill="#38bdf8" /><text x="524" y="188" fill="#94a3b8" font-size="11">Inconclusive</text>
-</svg></div>
-<div class="chart-card"><svg viewBox="0 0 560 232" width="560" height="232" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
-<title id="svg-title">Recovery funnel</title>
-<desc id="svg-desc">Recovery funnel: Failures detected 4, Recovery attempted 3, Recovered 1, Confirmed defect 2, Blocked 1.</desc>
-<rect x="0" y="0" width="560" height="232" fill="#0f2138" rx="12" />
-<text x="0" y="41" fill="#e2e8f0" font-size="13">Failures detected</text>
-<rect x="190" y="22" width="310" height="24" rx="4" fill="#38bdf8" data-stage="failuresDetected" data-value="4" />
-<text x="508" y="41" fill="#94a3b8" font-size="12">4</text>
-<text x="0" y="81" fill="#e2e8f0" font-size="13">Recovery attempted</text>
-<rect x="190" y="62" width="232.5" height="24" rx="4" fill="#a78bfa" data-stage="recoveryAttempted" data-value="3" />
-<text x="430.5" y="81" fill="#94a3b8" font-size="12">3</text>
-<text x="0" y="121" fill="#e2e8f0" font-size="13">Recovered</text>
-<rect x="190" y="102" width="77.5" height="24" rx="4" fill="#34d399" data-stage="recovered" data-value="1" />
-<text x="275.5" y="121" fill="#94a3b8" font-size="12">1</text>
-<text x="0" y="161" fill="#e2e8f0" font-size="13">Confirmed defect</text>
-<rect x="190" y="142" width="155" height="24" rx="4" fill="#f87171" data-stage="confirmedDefect" data-value="2" />
-<text x="353" y="161" fill="#94a3b8" font-size="12">2</text>
-<text x="0" y="201" fill="#e2e8f0" font-size="13">Blocked</text>
-<rect x="190" y="182" width="77.5" height="24" rx="4" fill="#fbbf24" data-stage="blocked" data-value="1" />
-<text x="275.5" y="201" fill="#94a3b8" font-size="12">1</text>
-</svg></div>
-<div class="chart-card" id="trend-chart"><svg viewBox="0 0 640 220" width="640" height="220" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
-<title id="svg-title">Pass/fail trend</title>
-<desc id="svg-desc">Pass/fail trend across 3 prior runs.</desc>
-<rect x="0" y="0" width="640" height="220" fill="#0f2138" rx="12" />
-<line x1="40" y1="180" x2="620" y2="180" stroke="#1e3a5f" stroke-width="1" />
-<rect x="44" y="73.33333333333334" width="90.66666666666667" height="106.66666666666666" fill="#34d399" data-run-id="run-2024-05-25" data-passed="4" />
-<rect x="138.66666666666669" y="126.66666666666667" width="90.66666666666667" height="53.33333333333333" fill="#f87171" data-run-id="run-2024-05-25" data-failed="2" />
-<text x="136.66666666666669" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">2024-05-25</text>
-<rect x="237.33333333333334" y="46.66666666666666" width="90.66666666666667" height="133.33333333333334" fill="#34d399" data-run-id="run-2024-05-29" data-passed="5" />
-<rect x="332" y="153.33333333333334" width="90.66666666666667" height="26.666666666666664" fill="#f87171" data-run-id="run-2024-05-29" data-failed="1" />
-<text x="330" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">2024-05-29</text>
-<rect x="430.6666666666667" y="153.33333333333334" width="90.66666666666667" height="26.666666666666664" fill="#34d399" data-run-id="run-2024-06-01" data-passed="1" />
-<rect x="525.3333333333334" y="126.66666666666667" width="90.66666666666667" height="53.33333333333333" fill="#f87171" data-run-id="run-2024-06-01" data-failed="2" />
-<text x="523.3333333333334" y="208" text-anchor="middle" fill="#94a3b8" font-size="10">2024-06-01</text>
-</svg></div>
-</div>
-</section>
-<section id="section-test-cases" aria-labelledby="test-cases-heading">
-<h2 id="test-cases-heading">Test Case Detail</h2>
-<div class="toolbar">
-<button type="button" data-action="expand-all">Expand all raw results</button>
-<button type="button" data-action="collapse-all">Collapse all raw results</button>
-</div>
-<article class="case-card" id="case-case-passed">
-<div class="case-card-head">
-<h3>Guest can complete checkout with a valid card</h3>
-<span class="badge badge-passed " style="--badge-color: #34d399">Passed</span>
-</div>
-<p>Guest can complete checkout with a valid card</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">high</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>medium</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>state_changing</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>18.0s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>1</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>step 0, step 1, step 2, step 3</dd></div>
-</dl>
-
-
-<h4>Assertions</h4>
-<table>
-<thead><tr><th>Kind</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead>
-<tbody><tr><td>url</td><td>/order/confirmation</td><td>/order/confirmation</td><td class="pass-cell">Pass</td></tr>
-<tr><td>text</td><td>Order confirmed</td><td>Order confirmed</td><td class="pass-cell">Pass</td></tr></tbody>
-</table>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-passed/screenshot-1.png">Screenshot 1</a> (screenshot)</li></ul>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          <h4>Assertions</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Expected</th>
+                <th>Observed</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>url</td>
+                <td>/order/confirmation</td>
+                <td>/order/confirmation</td>
+                <td class="pass-cell">Pass</td>
+              </tr>
+              <tr>
+                <td>text</td>
+                <td>Order confirmed</td>
+                <td>Order confirmed</td>
+                <td class="pass-cell">Pass</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-passed/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+          </ul>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-passed&quot;,
   &quot;attempts&quot;: 1,
   &quot;recoveryAttemptCount&quot;: 0,
   &quot;consoleLogCount&quot;: 2
 }</pre>
-</details>
-</article>
-<article class="case-card" id="case-case-failed">
-<div class="case-card-head">
-<h3>Checkout rejects an expired card with a clear error</h3>
-<span class="badge badge-failed " style="--badge-color: #f87171">Failed</span>
-</div>
-<p>Checkout rejects an expired card with a clear error</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">high</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>high</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>state_changing</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>22.5s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>1</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>step 0, step 1</dd></div>
-</dl>
-<p><a href="#finding-case-failed-0">View finding: Checkout rejects an expired card with a clear error &rarr;</a></p>
+          </details>
+        </article>
+        <article class="case-card" id="case-case-failed">
+          <div class="case-card-head">
+            <h3>Checkout rejects an expired card with a clear error</h3>
+            <span class="badge badge-failed" style="--badge-color: #f87171">Failed</span>
+          </div>
+          <p>Checkout rejects an expired card with a clear error</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">high</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>high</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>state_changing</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>22.5s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>1</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>step 0, step 1</dd>
+            </div>
+          </dl>
+          <p>
+            <a href="#finding-case-failed-0"
+              >View finding: Checkout rejects an expired card with a clear error &rarr;</a
+            >
+          </p>
 
-<h4>Assertions</h4>
-<table>
-<thead><tr><th>Kind</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead>
-<tbody><tr><td>text</td><td>Your card has expired</td><td>Something went wrong. Please try again.</td><td class="fail-cell">Fail</td></tr></tbody>
-</table>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-failed/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
-<li><a href="case-failed/trace.zip">Playwright trace</a> (trace)</li></ul>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          <h4>Assertions</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Expected</th>
+                <th>Observed</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>text</td>
+                <td>Your card has expired</td>
+                <td>Something went wrong. Please try again.</td>
+                <td class="fail-cell">Fail</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-failed/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+            <li><a href="case-failed/trace.zip">Playwright trace</a> (trace)</li>
+          </ul>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-failed&quot;,
   &quot;attempts&quot;: 1,
   &quot;recoveryAttemptCount&quot;: 0,
   &quot;consoleLogCount&quot;: 5,
   &quot;error&quot;: &quot;assertion failed: text&quot;
 }</pre>
-</details>
-</article>
-<article class="case-card" id="case-case-recovery-exhausted">
-<div class="case-card-head">
-<h3>Cart quantity stepper updates the subtotal</h3>
-<span class="badge badge-failed " style="--badge-color: #f87171">Failed</span>
-</div>
-<p>Cart quantity stepper updates the subtotal</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">medium</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>medium</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>state_changing</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>41.0s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>3</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>step 0</dd></div>
-</dl>
-<p><a href="#finding-case-recovery-exhausted-1">View finding: Cart quantity stepper updates the subtotal &rarr;</a></p>
-<h4>Recovery attempts</h4><div class="recovery-card">
-<div><strong>step 1: click quantity increment</strong> — attempt 1 of 3</div>
-<div>Failure: Locator for the quantity increment button no longer resolved.</div>
-<div>Action: Retried using accessible role + name lookup.</div>
-<div class="recovery-outcome recovery-outcome-recovered">Outcome: recovered</div>
-</div>
-<div class="recovery-card">
-<div><strong>step 2: read updated subtotal</strong> — attempt 2 of 3</div>
-<div>Failure: Subtotal element became detached from the DOM after a re-render.</div>
-<div>Action: Retried using visible text match on the subtotal region.</div>
-<div class="recovery-outcome recovery-outcome-exhausted">Outcome: exhausted</div>
-</div>
-<h4>Assertions</h4>
-<table>
-<thead><tr><th>Kind</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead>
-<tbody><tr><td>text</td><td>$45.00</td><td>$40.00</td><td class="fail-cell">Fail</td></tr></tbody>
-</table>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-recovery-exhausted/screenshot-1.png">Screenshot 1</a> (screenshot)</li></ul>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          </details>
+        </article>
+        <article class="case-card" id="case-case-recovery-exhausted">
+          <div class="case-card-head">
+            <h3>Cart quantity stepper updates the subtotal</h3>
+            <span class="badge badge-failed" style="--badge-color: #f87171">Failed</span>
+          </div>
+          <p>Cart quantity stepper updates the subtotal</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">medium</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>medium</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>state_changing</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>41.0s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>3</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>step 0</dd>
+            </div>
+          </dl>
+          <p>
+            <a href="#finding-case-recovery-exhausted-1"
+              >View finding: Cart quantity stepper updates the subtotal &rarr;</a
+            >
+          </p>
+          <h4>Recovery attempts</h4>
+          <div class="recovery-card">
+            <div><strong>step 1: click quantity increment</strong> — attempt 1 of 3</div>
+            <div>Failure: Locator for the quantity increment button no longer resolved.</div>
+            <div>Action: Retried using accessible role + name lookup.</div>
+            <div class="recovery-outcome recovery-outcome-recovered">Outcome: recovered</div>
+          </div>
+          <div class="recovery-card">
+            <div><strong>step 2: read updated subtotal</strong> — attempt 2 of 3</div>
+            <div>Failure: Subtotal element became detached from the DOM after a re-render.</div>
+            <div>Action: Retried using visible text match on the subtotal region.</div>
+            <div class="recovery-outcome recovery-outcome-exhausted">Outcome: exhausted</div>
+          </div>
+          <h4>Assertions</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Expected</th>
+                <th>Observed</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>text</td>
+                <td>$45.00</td>
+                <td>$40.00</td>
+                <td class="fail-cell">Fail</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-recovery-exhausted/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+          </ul>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-recovery-exhausted&quot;,
   &quot;attempts&quot;: 3,
   &quot;recoveryAttemptCount&quot;: 2,
   &quot;consoleLogCount&quot;: 8,
   &quot;error&quot;: &quot;assertion failed: subtotal mismatch after exhausted recovery&quot;
 }</pre>
-</details>
-</article>
-<article class="case-card" id="case-case-blocked">
-<div class="case-card-head">
-<h3>Admin can issue a refund from the orders console</h3>
-<span class="badge badge-blocked " style="--badge-color: #fbbf24">Blocked</span>
-</div>
-<p>Admin can issue a refund from the orders console</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">low</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>high</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>state_changing</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>4.0s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>0</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>None reached</dd></div>
-</dl>
+          </details>
+        </article>
+        <article class="case-card" id="case-case-blocked">
+          <div class="case-card-head">
+            <h3>Admin can issue a refund from the orders console</h3>
+            <span class="badge badge-blocked" style="--badge-color: #fbbf24">Blocked</span>
+          </div>
+          <p>Admin can issue a refund from the orders console</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">low</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>high</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>state_changing</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>4.0s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>0</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>None reached</dd>
+            </div>
+          </dl>
 
-<h4>Recovery attempts</h4><div class="recovery-card">
-<div><strong>step 0: navigate to admin console</strong> — attempt 1 of 1</div>
-<div>Failure: Admin console origin is outside the approved scope manifest.</div>
-<div>Action: Declined to navigate outside allowed domains.</div>
-<div class="recovery-outcome recovery-outcome-blocked_by_policy">Outcome: blocked by policy</div>
-</div>
-<h4>Assertions</h4>
-<p class="no-data">No assertions recorded.</p>
-<h4>Evidence</h4>
-<p class="no-data">No evidence captured.</p>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          <h4>Recovery attempts</h4>
+          <div class="recovery-card">
+            <div><strong>step 0: navigate to admin console</strong> — attempt 1 of 1</div>
+            <div>Failure: Admin console origin is outside the approved scope manifest.</div>
+            <div>Action: Declined to navigate outside allowed domains.</div>
+            <div class="recovery-outcome recovery-outcome-blocked_by_policy">Outcome: blocked by policy</div>
+          </div>
+          <h4>Assertions</h4>
+          <p class="no-data">No assertions recorded.</p>
+          <h4>Evidence</h4>
+          <p class="no-data">No evidence captured.</p>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-blocked&quot;,
   &quot;attempts&quot;: 0,
   &quot;recoveryAttemptCount&quot;: 1,
   &quot;consoleLogCount&quot;: 0
 }</pre>
-</details>
-</article>
-<article class="case-card" id="case-case-inconclusive">
-<div class="case-card-head">
-<h3>Promo code banner appears on the cart page</h3>
-<span class="badge badge-inconclusive " style="--badge-color: #38bdf8">Inconclusive</span>
-</div>
-<p>Promo code banner appears on the cart page</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">low</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>low</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>read_only</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>9.5s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>1</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>step 0</dd></div>
-</dl>
+          </details>
+        </article>
+        <article class="case-card" id="case-case-inconclusive">
+          <div class="case-card-head">
+            <h3>Promo code banner appears on the cart page</h3>
+            <span class="badge badge-inconclusive" style="--badge-color: #38bdf8">Inconclusive</span>
+          </div>
+          <p>Promo code banner appears on the cart page</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">low</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>low</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>read_only</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>9.5s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>1</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>step 0</dd>
+            </div>
+          </dl>
 
-
-<h4>Assertions</h4>
-<table>
-<thead><tr><th>Kind</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead>
-<tbody><tr><td>visible</td><td>promo banner visible</td><td>timed out waiting for network idle</td><td class="fail-cell">Fail</td></tr></tbody>
-</table>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-inconclusive/console.log">Console log</a> (console_log)</li></ul>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          <h4>Assertions</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Expected</th>
+                <th>Observed</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>visible</td>
+                <td>promo banner visible</td>
+                <td>timed out waiting for network idle</td>
+                <td class="fail-cell">Fail</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-inconclusive/console.log">Console log</a> (console_log)</li>
+          </ul>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-inconclusive&quot;,
   &quot;attempts&quot;: 1,
   &quot;recoveryAttemptCount&quot;: 0,
   &quot;consoleLogCount&quot;: 1,
   &quot;error&quot;: &quot;harness timeout: network did not settle&quot;
 }</pre>
-</details>
-</article>
-<article class="case-card" id="case-case-flaky">
-<div class="case-card-head">
-<h3>Order confirmation email link opens the receipt</h3>
-<span class="badge badge-flaky " style="--badge-color: #a78bfa">Flaky</span>
-</div>
-<p>Order confirmation email link opens the receipt</p>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Confidence</dt><dd class="confidence">medium</dd></div>
-<div class="meta-item"><dt>Risk level</dt><dd>medium</dd></div>
-<div class="meta-item"><dt>Execution mode</dt><dd>read_only</dd></div>
-<div class="meta-item"><dt>Duration</dt><dd>31.2s</dd></div>
-<div class="meta-item"><dt>Attempts</dt><dd>2</dd></div>
-<div class="meta-item"><dt>Checkpoints reached</dt><dd>step 0, step 1</dd></div>
-</dl>
+          </details>
+        </article>
+        <article class="case-card" id="case-case-flaky">
+          <div class="case-card-head">
+            <h3>Order confirmation email link opens the receipt</h3>
+            <span class="badge badge-flaky" style="--badge-color: #a78bfa">Flaky</span>
+          </div>
+          <p>Order confirmation email link opens the receipt</p>
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>Confidence</dt>
+              <dd class="confidence">medium</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Risk level</dt>
+              <dd>medium</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Execution mode</dt>
+              <dd>read_only</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Duration</dt>
+              <dd>31.2s</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Attempts</dt>
+              <dd>2</dd>
+            </div>
+            <div class="meta-item">
+              <dt>Checkpoints reached</dt>
+              <dd>step 0, step 1</dd>
+            </div>
+          </dl>
 
-<h4>Recovery attempts</h4><div class="recovery-card">
-<div><strong>step 1: open receipt link</strong> — attempt 1 of 2</div>
-<div>Failure: First attempt hit a transient 502 from the email preview service.</div>
-<div>Action: Retried navigation once.</div>
-<div class="recovery-outcome recovery-outcome-recovered">Outcome: recovered</div>
-</div>
-<h4>Assertions</h4>
-<table>
-<thead><tr><th>Kind</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead>
-<tbody><tr><td>url</td><td>/receipt</td><td>/receipt</td><td class="pass-cell">Pass</td></tr></tbody>
-</table>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-flaky/screenshot-1.png">Screenshot 1</a> (screenshot)</li></ul>
-<details>
-<summary>Raw result (redacted)</summary>
-<pre>{
+          <h4>Recovery attempts</h4>
+          <div class="recovery-card">
+            <div><strong>step 1: open receipt link</strong> — attempt 1 of 2</div>
+            <div>Failure: First attempt hit a transient 502 from the email preview service.</div>
+            <div>Action: Retried navigation once.</div>
+            <div class="recovery-outcome recovery-outcome-recovered">Outcome: recovered</div>
+          </div>
+          <h4>Assertions</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Expected</th>
+                <th>Observed</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>url</td>
+                <td>/receipt</td>
+                <td>/receipt</td>
+                <td class="pass-cell">Pass</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-flaky/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+          </ul>
+          <details>
+            <summary>Raw result (redacted)</summary>
+            <pre>
+{
   &quot;caseId&quot;: &quot;case-flaky&quot;,
   &quot;attempts&quot;: 2,
   &quot;recoveryAttemptCount&quot;: 1,
   &quot;consoleLogCount&quot;: 3
 }</pre>
-</details>
-</article>
-</section>
-<section id="section-findings" aria-labelledby="findings-heading">
-<h2 id="findings-heading">Findings</h2>
-<article class="finding-card" id="finding-case-failed-0">
-<div class="case-card-head">
-<h3>Checkout rejects an expired card with a clear error</h3>
-<span class="severity severity-high">High</span>
-<span class="tag tag-product-defect">Product defect</span>
-</div>
-<p><a href="#case-case-failed">&larr; Back to test case</a></p>
-<p><strong>Observed:</strong> Something went wrong. Please try again.</p>
-<p><strong>Expected:</strong> Your card has expired</p>
-<p><strong>Affected checkpoint:</strong> step 2</p>
-<p><strong>Recovery continued the run:</strong> No</p>
-<h4>Reproduction path</h4>
-<ol><li>Step 0: passed</li>
-<li>Step 1: passed</li>
-<li>Step 2: failed</li></ol>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-failed/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
-<li><a href="case-failed/trace.zip">Playwright trace</a> (trace)</li></ul>
-</article>
-<article class="finding-card" id="finding-case-recovery-exhausted-1">
-<div class="case-card-head">
-<h3>Cart quantity stepper updates the subtotal</h3>
-<span class="severity severity-medium">Medium</span>
-<span class="tag tag-product-defect">Product defect</span>
-</div>
-<p><a href="#case-case-recovery-exhausted">&larr; Back to test case</a></p>
-<p><strong>Observed:</strong> $40.00</p>
-<p><strong>Expected:</strong> $45.00</p>
-<p><strong>Affected checkpoint:</strong> step 2</p>
-<p><strong>Recovery continued the run:</strong> Yes</p>
-<h4>Reproduction path</h4>
-<ol><li>Step 0: passed</li>
-<li>Step 1: passed (recovered)</li>
-<li>Step 2: failed (recovery exhausted)</li></ol>
-<h4>Evidence</h4>
-<ul class="evidence-list"><li><a href="case-recovery-exhausted/screenshot-1.png">Screenshot 1</a> (screenshot)</li></ul>
-</article>
-</section>
-<section id="section-governance" aria-labelledby="governance-heading">
-<h2 id="governance-heading">Governance</h2>
-<dl class="meta-grid">
-<div class="meta-item"><dt>Scope manifest version</dt><dd>checkout-web-manifest-v3</dd></div>
-<div class="meta-item"><dt>Test plan</dt><dd>plan-checkout-regression v2</dd></div>
-<div class="meta-item"><dt>Approver</dt><dd>qa-lead</dd></div>
-<div class="meta-item"><dt>Approval decision</dt><dd>approved</dd></div>
-<div class="meta-item"><dt>Decided at</dt><dd>2024-06-01 10:02:05.000 UTC</dd></div>
-<div class="meta-item"><dt>Execution policy</dt><dd>safe_test mode; scope limited to staging.checkout.example.com, checkout-api.example.com</dd></div>
-<div class="meta-item"><dt>Runtime versions</dt><dd>nova@0.1.0, playwright@1.63.0</dd></div>
-</dl>
-<h3>State transitions</h3>
-<table>
-<thead><tr><th>From</th><th>To</th><th>At</th></tr></thead>
-<tbody><tr><td>—</td><td>discovering</td><td>2024-06-01 10:00:00.000 UTC</td></tr>
-<tr><td>discovering</td><td>planning</td><td>2024-06-01 10:00:45.000 UTC</td></tr>
-<tr><td>planning</td><td>awaiting_approval</td><td>2024-06-01 10:01:20.000 UTC</td></tr>
-<tr><td>awaiting_approval</td><td>approved</td><td>2024-06-01 10:02:05.000 UTC</td></tr>
-<tr><td>approved</td><td>executing</td><td>2024-06-01 10:02:06.000 UTC</td></tr>
-<tr><td>executing</td><td>verifying</td><td>2024-06-01 10:06:30.000 UTC</td></tr>
-<tr><td>verifying</td><td>failed</td><td>2024-06-01 10:07:05.000 UTC</td></tr></tbody>
-</table>
-<h3>Audit timeline</h3>
-<table>
-<thead><tr><th>Timestamp</th><th>Type</th><th>Actor</th><th>Detail</th></tr></thead>
-<tbody><tr><td>2024-06-01 10:00:00.000 UTC</td><td>discovery_completed</td><td>system</td><td><pre>{&quot;pagesCrawled&quot;:12}</pre></td></tr>
-<tr><td>2024-06-01 10:01:20.000 UTC</td><td>plan_ready_for_approval</td><td>system</td><td><pre>{&quot;caseCount&quot;:6}</pre></td></tr>
-<tr><td>2024-06-01 10:02:05.000 UTC</td><td>plan_approved</td><td>qa-lead</td><td><pre>{&quot;reviewer&quot;:&quot;qa-lead&quot;,&quot;secretToken&quot;:&quot;[redacted]&quot;}</pre></td></tr>
-<tr><td>2024-06-01 10:06:30.000 UTC</td><td>execution_completed</td><td>system</td><td><pre>{&quot;caseCount&quot;:6,&quot;recoveryAttempts&quot;:3}</pre></td></tr>
-<tr><td>2024-06-01 10:07:05.000 UTC</td><td>verification_completed</td><td>system</td><td><pre>{&quot;failed&quot;:2,&quot;blocked&quot;:1}</pre></td></tr></tbody>
-</table>
-</section>
-</main>
-<footer class="report-footer" id="section-footer">
-<p>Generated by Nova</p>
-<p>Generated at 2024-06-01 10:07:12.500 UTC · Report version 0.1.0+schema1</p>
-<p>Integrity hash: Not yet signed</p>
-</footer>
-<script>
-(function () {
-  function forEachDetails(fn) {
-    document.querySelectorAll("#section-test-cases details").forEach(fn);
-  }
-  var expandButton = document.querySelector('[data-action="expand-all"]');
-  var collapseButton = document.querySelector('[data-action="collapse-all"]');
-  if (expandButton) {
-    expandButton.addEventListener("click", function () {
-      forEachDetails(function (node) { node.open = true; });
-    });
-  }
-  if (collapseButton) {
-    collapseButton.addEventListener("click", function () {
-      forEachDetails(function (node) { node.open = false; });
-    });
-  }
-})();
-</script>
-</body>
+          </details>
+        </article>
+      </section>
+      <section id="section-findings" aria-labelledby="findings-heading">
+        <h2 id="findings-heading">Findings</h2>
+        <article class="finding-card" id="finding-case-failed-0">
+          <div class="case-card-head">
+            <h3>Checkout rejects an expired card with a clear error</h3>
+            <span class="severity severity-high">High</span>
+            <span class="tag tag-product-defect">Product defect</span>
+          </div>
+          <p><a href="#case-case-failed">&larr; Back to test case</a></p>
+          <p><strong>Observed:</strong> Something went wrong. Please try again.</p>
+          <p><strong>Expected:</strong> Your card has expired</p>
+          <p><strong>Affected checkpoint:</strong> step 2</p>
+          <p><strong>Recovery continued the run:</strong> No</p>
+          <h4>Reproduction path</h4>
+          <ol>
+            <li>Step 0: passed</li>
+            <li>Step 1: passed</li>
+            <li>Step 2: failed</li>
+          </ol>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-failed/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+            <li><a href="case-failed/trace.zip">Playwright trace</a> (trace)</li>
+          </ul>
+        </article>
+        <article class="finding-card" id="finding-case-recovery-exhausted-1">
+          <div class="case-card-head">
+            <h3>Cart quantity stepper updates the subtotal</h3>
+            <span class="severity severity-medium">Medium</span>
+            <span class="tag tag-product-defect">Product defect</span>
+          </div>
+          <p><a href="#case-case-recovery-exhausted">&larr; Back to test case</a></p>
+          <p><strong>Observed:</strong> $40.00</p>
+          <p><strong>Expected:</strong> $45.00</p>
+          <p><strong>Affected checkpoint:</strong> step 2</p>
+          <p><strong>Recovery continued the run:</strong> Yes</p>
+          <h4>Reproduction path</h4>
+          <ol>
+            <li>Step 0: passed</li>
+            <li>Step 1: passed (recovered)</li>
+            <li>Step 2: failed (recovery exhausted)</li>
+          </ol>
+          <h4>Evidence</h4>
+          <ul class="evidence-list">
+            <li><a href="case-recovery-exhausted/screenshot-1.png">Screenshot 1</a> (screenshot)</li>
+          </ul>
+        </article>
+      </section>
+      <section id="section-governance" aria-labelledby="governance-heading">
+        <h2 id="governance-heading">Governance</h2>
+        <dl class="meta-grid">
+          <div class="meta-item">
+            <dt>Scope manifest version</dt>
+            <dd>checkout-web-manifest-v3</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Test plan</dt>
+            <dd>plan-checkout-regression v2</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Approver</dt>
+            <dd>qa-lead</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Approval decision</dt>
+            <dd>approved</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Decided at</dt>
+            <dd>2024-06-01 10:02:05.000 UTC</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Execution policy</dt>
+            <dd>safe_test mode; scope limited to staging.checkout.example.com, checkout-api.example.com</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Runtime versions</dt>
+            <dd>nova@0.1.0, playwright@1.63.0</dd>
+          </div>
+        </dl>
+        <h3>State transitions</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>To</th>
+              <th>At</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>—</td>
+              <td>discovering</td>
+              <td>2024-06-01 10:00:00.000 UTC</td>
+            </tr>
+            <tr>
+              <td>discovering</td>
+              <td>planning</td>
+              <td>2024-06-01 10:00:45.000 UTC</td>
+            </tr>
+            <tr>
+              <td>planning</td>
+              <td>awaiting_approval</td>
+              <td>2024-06-01 10:01:20.000 UTC</td>
+            </tr>
+            <tr>
+              <td>awaiting_approval</td>
+              <td>approved</td>
+              <td>2024-06-01 10:02:05.000 UTC</td>
+            </tr>
+            <tr>
+              <td>approved</td>
+              <td>executing</td>
+              <td>2024-06-01 10:02:06.000 UTC</td>
+            </tr>
+            <tr>
+              <td>executing</td>
+              <td>verifying</td>
+              <td>2024-06-01 10:06:30.000 UTC</td>
+            </tr>
+            <tr>
+              <td>verifying</td>
+              <td>failed</td>
+              <td>2024-06-01 10:07:05.000 UTC</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>Audit timeline</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Type</th>
+              <th>Actor</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2024-06-01 10:00:00.000 UTC</td>
+              <td>discovery_completed</td>
+              <td>system</td>
+              <td><pre>{&quot;pagesCrawled&quot;:12}</pre></td>
+            </tr>
+            <tr>
+              <td>2024-06-01 10:01:20.000 UTC</td>
+              <td>plan_ready_for_approval</td>
+              <td>system</td>
+              <td><pre>{&quot;caseCount&quot;:6}</pre></td>
+            </tr>
+            <tr>
+              <td>2024-06-01 10:02:05.000 UTC</td>
+              <td>plan_approved</td>
+              <td>qa-lead</td>
+              <td>
+                <pre>
+{&quot;reviewer&quot;:&quot;qa-lead&quot;,&quot;secretToken&quot;:&quot;[redacted]&quot;}</pre>
+              </td>
+            </tr>
+            <tr>
+              <td>2024-06-01 10:06:30.000 UTC</td>
+              <td>execution_completed</td>
+              <td>system</td>
+              <td><pre>{&quot;caseCount&quot;:6,&quot;recoveryAttempts&quot;:3}</pre></td>
+            </tr>
+            <tr>
+              <td>2024-06-01 10:07:05.000 UTC</td>
+              <td>verification_completed</td>
+              <td>system</td>
+              <td><pre>{&quot;failed&quot;:2,&quot;blocked&quot;:1}</pre></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+    <footer class="report-footer" id="section-footer">
+      <p>Generated by Nova</p>
+      <p>Generated at 2024-06-01 10:07:12.500 UTC · Report version 0.1.0+schema1</p>
+      <p>Integrity hash: Not yet signed</p>
+    </footer>
+    <script>
+      (function () {
+        function forEachDetails(fn) {
+          document.querySelectorAll("#section-test-cases details").forEach(fn);
+        }
+        var expandButton = document.querySelector('[data-action="expand-all"]');
+        var collapseButton = document.querySelector('[data-action="collapse-all"]');
+        if (expandButton) {
+          expandButton.addEventListener("click", function () {
+            forEachDetails(function (node) {
+              node.open = true;
+            });
+          });
+        }
+        if (collapseButton) {
+          collapseButton.addEventListener("click", function () {
+            forEachDetails(function (node) {
+              node.open = false;
+            });
+          });
+        }
+      })();
+    </script>
+  </body>
 </html>

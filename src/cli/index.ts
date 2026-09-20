@@ -10,6 +10,7 @@ import { loadConfig } from "../config/index.js";
 import { runApprove, runDiscover, runExecution, runPlan, runReport } from "./commands.js";
 import { serveMcp } from "../mcp/server.js";
 import { runTui } from "../tui/index.js";
+import { captureStorageState } from "../services/browser/login.js";
 import type { UserJourney, VerificationResult } from "../domain/index.js";
 import {
   approveJourney,
@@ -103,19 +104,56 @@ program
   .description("Crawl a target and capture a read-only application map.")
   .requiredOption("--target <url>", "Target application URL")
   .option("--manifest <path>", "Path to an approved TargetManifest JSON file")
+  .option(
+    "--storage-state <path>",
+    "Path to a session captured by `nova login` — crawl as that signed-in user",
+  )
   .option("--no-headless", "Run the browser headed")
-  .action(async (options: { target: string; manifest?: string; headless: boolean }) => {
-    const runtime = buildRuntime();
+  .action(
+    async (options: { target: string; manifest?: string; storageState?: string; headless: boolean }) => {
+      const runtime = buildRuntime();
+      try {
+        const result = await runDiscover(runtime, {
+          target: options.target,
+          manifest: options.manifest,
+          storageState: options.storageState,
+          headless: options.headless,
+        });
+        process.stdout.write(`Run ${result.runId}: discovered ${result.pageCount} page(s).\n`);
+        process.stdout.write(`Next: nova plan --objective "<your objective>" --run ${result.runId}\n`);
+      } finally {
+        runtime.repository.close();
+      }
+    },
+  );
+
+program
+  .command("login")
+  .description(
+    "Open a headed browser, sign in by hand, and save the session for --storage-state on discover/map discover.",
+  )
+  .requiredOption("--url <url>", "Target application URL to open")
+  .requiredOption(
+    "--save-storage-state <path>",
+    "Where to write the captured session (cookies + localStorage)",
+  )
+  .action(async (options: { url: string; saveStorageState: string }) => {
+    const session = createPromptSession();
     try {
-      const result = await runDiscover(runtime, {
-        target: options.target,
-        manifest: options.manifest,
-        headless: options.headless,
+      process.stdout.write(`Opening ${options.url} — sign in in the browser window, then return here.\n`);
+      const result = await captureStorageState({
+        url: options.url,
+        outputPath: options.saveStorageState,
+        waitForOperator: async () => {
+          await session.line("Press Enter once you are signed in");
+        },
       });
-      process.stdout.write(`Run ${result.runId}: discovered ${result.pageCount} page(s).\n`);
-      process.stdout.write(`Next: nova plan --objective "<your objective>" --run ${result.runId}\n`);
+      process.stdout.write(`Saved session to ${result.outputPath} (permissions 0600).\n`);
+      process.stdout.write(
+        `Next: nova discover --target ${options.url} --storage-state ${result.outputPath}\n`,
+      );
     } finally {
-      runtime.repository.close();
+      session.close();
     }
   });
 
@@ -211,6 +249,10 @@ const mapDiscoverCommand = withInteractivityOptions(
     .option("--target <url>", "Target application URL")
     .option("--name <applicationName>", "Name for the new map's application")
     .option("--env <environment>", "local|development|staging|production")
+    .option(
+      "--storage-state <path>",
+      "Path to a session captured by `nova login` — every journey run against this map reuses it",
+    )
     .option("--no-headless", "Run the browser headed"),
 );
 mapDiscoverCommand.action(
@@ -218,6 +260,7 @@ mapDiscoverCommand.action(
     target?: string;
     name?: string;
     env?: string;
+    storageState?: string;
     headless: boolean;
     interactive?: boolean;
     nonInteractive?: boolean;
@@ -235,6 +278,7 @@ mapDiscoverCommand.action(
         target: input.target,
         applicationName: input.name,
         environment: input.env,
+        storageStatePath: options.storageState,
         headless: options.headless,
       });
       const journeyCount = result.map.areas.reduce((total, area) => total + area.journeys.length, 0);

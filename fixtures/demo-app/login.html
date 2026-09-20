@@ -6,10 +6,21 @@
   </head>
   <body>
     <h1>Sign in</h1>
-    <form id="login-form" action="/checkout.html" method="get">
+    <form id="login-form">
       <label>Email <input type="email" name="email" /></label>
       <label>Password <input type="password" name="password" /></label>
       <button type="submit">Sign in</button>
     </form>
+    <script>
+      // Stands in for a real backend session cookie: writes a token to
+      // localStorage on submit so a captured storage state has
+      // something concrete to verify in tests, without any real
+      // credential ever leaving the operator's own browser session.
+      document.getElementById("login-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.localStorage.setItem("nova-demo-session", "signed-in");
+        window.location.href = "/checkout.html";
+      });
+    </script>
   </body>
 </html>

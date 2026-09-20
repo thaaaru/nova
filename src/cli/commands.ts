@@ -15,12 +15,17 @@ import { resolveRunId, setCurrentRunId } from "./context.js";
  * get printed.
  */
 
-function loadManifest(target: string, manifestPath: string | undefined): TargetManifest {
+function loadManifest(
+  target: string,
+  manifestPath: string | undefined,
+  storageState: string | undefined,
+): TargetManifest {
   if (manifestPath) {
     if (!existsSync(manifestPath)) {
       throw new Error(`Manifest file not found: ${manifestPath}`);
     }
-    return TargetManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
+    const parsed = TargetManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
+    return storageState ? { ...parsed, storageStatePath: storageState } : parsed;
   }
 
   const hostname = new URL(target).hostname;
@@ -30,6 +35,7 @@ function loadManifest(target: string, manifestPath: string | undefined): TargetM
     allowedDomains: [hostname],
     environment: "local",
     description: `Auto-derived manifest for ${target} (no --manifest supplied).`,
+    storageStatePath: storageState,
     createdAt: new Date().toISOString(),
   });
 }
@@ -38,9 +44,9 @@ export type DiscoverResult = { runId: string; pageCount: number; visitedUrls: st
 
 export async function runDiscover(
   runtime: NovaRuntime,
-  options: { target: string; manifest?: string; headless?: boolean },
+  options: { target: string; manifest?: string; storageState?: string; headless?: boolean },
 ): Promise<DiscoverResult> {
-  const manifest = loadManifest(options.target, options.manifest);
+  const manifest = loadManifest(options.target, options.manifest, options.storageState);
   const runId = randomUUID();
   const now = new Date().toISOString();
 
