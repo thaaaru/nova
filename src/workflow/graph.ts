@@ -3,7 +3,7 @@ import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 
 import type { DiscoverDependencies } from "./nodes/discover.js";
 import { createDiscoverNode } from "./nodes/discover.js";
-import { createPlanNode } from "./nodes/plan.js";
+import { createPlanNode, type PlanDependencies } from "./nodes/plan.js";
 import { createApprovalGateNode } from "./nodes/approval-gate.js";
 import { createExecuteNode, type ExecuteDependencies } from "./nodes/execute.js";
 import { createVerifyNode } from "./nodes/verify.js";
@@ -13,6 +13,8 @@ import { GraphStateAnnotation } from "./state.js";
 
 export type NovaGraphDependencies = {
   discover: DiscoverDependencies;
+  /** Omit entirely (or omit generateCases) to keep the plan node fully deterministic — no OpenAI call at all. */
+  plan?: PlanDependencies;
   execute: ExecuteDependencies;
   report: ReportDependencies;
   /** Path to the LangGraph checkpoint database, distinct from RunRepository's own database. */
@@ -37,7 +39,7 @@ function compileNovaGraph(deps: NovaGraphDependencies) {
 
   const graph = new StateGraph(GraphStateAnnotation)
     .addNode("discover", createDiscoverNode(deps.discover))
-    .addNode("plan", createPlanNode())
+    .addNode("plan", createPlanNode(deps.plan))
     .addNode("approval_gate", createApprovalGateNode())
     .addNode("execute", createExecuteNode(deps.execute))
     .addNode("verify", createVerifyNode())

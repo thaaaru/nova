@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { discoverApplication } from "../services/browser/discover.js";
 import { executeTestCase } from "../services/browser/execute.js";
 import { EnvSecretResolver } from "../services/policy/secret-resolver.js";
+import { createOpenAiPlanGenerator } from "../services/llm/openai-plan-generator.js";
 import { SqliteRunRepository, type RunRepository } from "../services/persistence/run-repository.js";
 import {
   SqliteApplicationTestMapRepository,
@@ -29,6 +30,18 @@ export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
 
   const graph = buildNovaGraph({
     discover: { discover: discoverApplication, headless: config.headless },
+    // The orchestrator's LLM integration is opt-in: only wired when
+    // OPENAI_API_KEY is present in the environment (see config/index.ts).
+    // Without it, plan stays fully deterministic — no key, no network
+    // call, no behavior change from before this existed.
+    plan: config.openaiApiKey
+      ? {
+          generateCases: createOpenAiPlanGenerator({
+            apiKey: config.openaiApiKey,
+            model: config.openaiModel,
+          }),
+        }
+      : undefined,
     execute: {
       executeTestCase,
       secretResolver,
