@@ -105,6 +105,69 @@ function formJourneyForPage(page: DiscoveredPage, areaId: string, formIndex: num
 }
 
 /**
+ * Maximum standalone-control draft journeys created per page — discovery
+ * often finds dozens of buttons (nav toggles, cookie banners, "skip to
+ * content"); capping keeps the draft map reviewable instead of dumping
+ * every clickable element as its own candidate journey.
+ */
+const MAX_CONTROL_JOURNEYS_PER_PAGE = 5;
+
+/**
+ * One candidate state-changing journey per standalone button — a control
+ * discovery already found (page.buttons) but that discovery-to-map used
+ * to silently drop, because only `page.forms` produced journeys. Many
+ * real interactions (an "Add to cart" button, a modal trigger, a
+ * JS-driven action) are not inside a `<form>` at all, so without this a
+ * whole class of state-changing controls never became testable. Draft,
+ * guided_test (same posture as a form journey: a human supplies the
+ * concrete expectation before it can run). Pure navigation `<a>` links
+ * are deliberately excluded — the linked page already gets its own
+ * page-load smoke journey once discovery visits it, so treating a link
+ * as a second candidate would just duplicate that coverage.
+ */
+function controlJourneysForPage(page: DiscoveredPage, areaId: string): UserJourney[] {
+  const seenText = new Set<string>();
+  const journeys: UserJourney[] = [];
+
+  for (const control of page.buttons) {
+    if (journeys.length >= MAX_CONTROL_JOURNEYS_PER_PAGE) {
+      break;
+    }
+    const text = control.text.trim();
+    if (text.length === 0 || seenText.has(text)) {
+      continue;
+    }
+    seenText.add(text);
+
+    journeys.push({
+      id: `journey-${slug(page.title || page.url)}-control-${slug(text)}-${slug(areaId)}`.slice(0, 80),
+      areaId,
+      name: `"${text}" on ${page.title || page.url}`,
+      description: `Activate the "${text}" control at ${page.url} and confirm the expected outcome.`,
+      mode: "guided_test",
+      requiredPersonaIds: [],
+      requiredFixtureIds: [],
+      checkpoints: [
+        {
+          id: "checkpoint-control-activates",
+          name: "Control activates",
+          expectedOutcome: `Activating "${text}" produces the expected result with no client- or server-side error.`,
+          riskLevel: "medium",
+          requiresApproval: true,
+          evidenceRequirements: ["screenshot"],
+          steps: [{ kind: "navigate", url: page.url, timeoutMs: 10_000 }],
+          assertions: [{ kind: "urlContains", expected: "" }],
+        },
+      ],
+      allowedRecoveryActions: ["role_name_match", "visible_text_match"],
+      status: "draft",
+    });
+  }
+
+  return journeys;
+}
+
+/**
  * Builds an initial draft Application Test Map straight from a
  * DiscoverySnapshot — deterministic grouping/heuristics only, never a
  * model. The result's `status` is always "draft": nothing here is
@@ -143,6 +206,13 @@ export function buildDraftMapFromDiscovery(
         area.riskLevel = "medium";
       }
     });
+    for (const controlJourney of controlJourneysForPage(page, areaId)) {
+      if (!existingIds.has(controlJourney.id)) {
+        area.journeys.push(controlJourney);
+        existingIds.add(controlJourney.id);
+        area.riskLevel = "medium";
+      }
+    }
 
     if (page.consoleErrors.length > 0) {
       knownConstraints.push({
