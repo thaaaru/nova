@@ -48,7 +48,9 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
   const apiEndpoints = new Set<string>();
 
   try {
-    const context = await browser.newContext();
+    const context = await browser.newContext(
+      options.manifest.storageStatePath ? { storageState: options.manifest.storageStatePath } : {},
+    );
     const queue: string[] = [normalizeUrl(options.manifest.baseUrl)];
     const seen = new Set<string>();
 

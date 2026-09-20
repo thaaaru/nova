@@ -18,6 +18,7 @@ import { PlanReviewScreen } from "./screens/PlanReviewScreen.js";
 import { LiveExecutionScreen } from "./screens/LiveExecutionScreen.js";
 import { CompletionScreen } from "./screens/CompletionScreen.js";
 import { MapHomeScreen } from "./screens/MapHomeScreen.js";
+import { MapDiscoverScreen } from "./screens/MapDiscoverScreen.js";
 import { AreaSelectScreen } from "./screens/AreaSelectScreen.js";
 import { JourneySelectScreen } from "./screens/JourneySelectScreen.js";
 import { TestContextScreen, type SelectedTestContext } from "./screens/TestContextScreen.js";
@@ -47,6 +48,7 @@ type Screen =
   | "plan-review"
   | "live-execution"
   | "completion"
+  | "map-discover"
   | "map-area-select"
   | "map-journey-select"
   | "map-context"
@@ -115,6 +117,10 @@ export function App({ runtime }: AppProps): React.ReactElement {
   }
 
   function handleMapHomeSelect(optionId: MapHomeMenuOptionId): void {
+    if (optionId === "discover-app") {
+      setScreen("map-discover");
+      return;
+    }
     if (optionId === "command-mode") {
       setCommandOpen(true);
       return;
@@ -135,7 +141,10 @@ export function App({ runtime }: AppProps): React.ReactElement {
       return;
     }
     if (!activeMap) {
-      setCommandOutput(["No application test map yet — run `nova map discover` first."]);
+      // Every remaining option needs a map — send the operator straight
+      // into discovery instead of dead-ending on a message that names a
+      // shell command they would have to leave the TUI to run.
+      setScreen("map-discover");
       return;
     }
     if (optionId === "test-area") {
@@ -325,6 +334,18 @@ export function App({ runtime }: AppProps): React.ReactElement {
           onSelect={handleMapHomeSelect}
           onQuit={exit}
           inputActive={!commandOpen}
+        />
+      ) : null}
+
+      {screen === "map-discover" ? (
+        <MapDiscoverScreen
+          runtime={runtime}
+          onComplete={(map) => {
+            setMapId(map.id);
+            refreshMaps();
+            setScreen("map-explore");
+          }}
+          onCancel={() => setScreen("home")}
         />
       ) : null}
 

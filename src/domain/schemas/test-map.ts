@@ -26,6 +26,12 @@ export const ApprovedScopeSchema = z.object({
   allowedApiHosts: z.array(z.string().min(1)).default([]),
   allowedMethods: z.array(z.string().min(1)).default(["GET", "POST"]),
   executionMode: RunExecutionModeSchema.default("safe_test"),
+  /**
+   * Path to a session file captured by `nova login` (cookies +
+   * localStorage, never a credential) that every journey run against
+   * this map should reuse to crawl/execute as a signed-in user.
+   */
+  storageStatePath: z.string().min(1).optional(),
 });
 export type ApprovedScope = z.infer<typeof ApprovedScopeSchema>;
 

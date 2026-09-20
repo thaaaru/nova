@@ -15,15 +15,16 @@ import {
 } from "../../src/tui/services/testmap-view-model.js";
 
 describe("MAP_HOME_MENU_ITEMS", () => {
-  it("has exactly the seven numbered options from the product spec", () => {
+  it("has exactly the eight numbered options from the product spec", () => {
     expect(MAP_HOME_MENU_ITEMS.map((item) => `${item.number}. ${item.label}`)).toEqual([
-      "1. Test an application area",
-      "2. Describe a test",
-      "3. Run recommended regression tests",
-      "4. Explore and update application map",
-      "5. Review failures and recoveries",
-      "6. Open recent reports",
-      "7. Advanced command mode",
+      "1. Discover an application",
+      "2. Test an application area",
+      "3. Describe a test",
+      "4. Run recommended regression tests",
+      "5. Explore and update application map",
+      "6. Review failures and recoveries",
+      "7. Open recent reports",
+      "8. Advanced command mode",
     ]);
   });
 });

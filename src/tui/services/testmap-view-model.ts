@@ -13,16 +13,24 @@ import { POLICY_MODE_LABEL } from "./view-model.js";
  * product spec's wording so operators can drive the menu by digit key.
  */
 export type MapHomeMenuOptionId =
-  "test-area" | "describe-test" | "recommendations" | "explore-map" | "failures" | "reports" | "command-mode";
+  | "discover-app"
+  | "test-area"
+  | "describe-test"
+  | "recommendations"
+  | "explore-map"
+  | "failures"
+  | "reports"
+  | "command-mode";
 
 export const MAP_HOME_MENU_ITEMS: Array<{ id: MapHomeMenuOptionId; number: number; label: string }> = [
-  { id: "test-area", number: 1, label: "Test an application area" },
-  { id: "describe-test", number: 2, label: "Describe a test" },
-  { id: "recommendations", number: 3, label: "Run recommended regression tests" },
-  { id: "explore-map", number: 4, label: "Explore and update application map" },
-  { id: "failures", number: 5, label: "Review failures and recoveries" },
-  { id: "reports", number: 6, label: "Open recent reports" },
-  { id: "command-mode", number: 7, label: "Advanced command mode" },
+  { id: "discover-app", number: 1, label: "Discover an application" },
+  { id: "test-area", number: 2, label: "Test an application area" },
+  { id: "describe-test", number: 3, label: "Describe a test" },
+  { id: "recommendations", number: 4, label: "Run recommended regression tests" },
+  { id: "explore-map", number: 5, label: "Explore and update application map" },
+  { id: "failures", number: 6, label: "Review failures and recoveries" },
+  { id: "reports", number: 7, label: "Open recent reports" },
+  { id: "command-mode", number: 8, label: "Advanced command mode" },
 ];
 
 /**

@@ -23,6 +23,12 @@ export const TargetManifestSchema = z.object({
    * high-risk cases. Enforced in scope-policy, never left to a model.
    */
   runExecutionMode: RunExecutionModeSchema.default("safe_test"),
+  /**
+   * Path to a session file captured by `nova login` (cookies +
+   * localStorage only, never a credential) so discovery/execution can
+   * crawl as a signed-in user. Optional — omitted means public/anonymous.
+   */
+  storageStatePath: z.string().min(1).optional(),
   createdAt: z.string().datetime(),
 });
 export type TargetManifest = z.infer<typeof TargetManifestSchema>;

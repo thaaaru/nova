@@ -35,6 +35,7 @@ export async function discoverMap(
     target: string;
     applicationName: string;
     environment: ApplicationTestMapEnvironment;
+    storageStatePath?: string;
     headless?: boolean;
   },
 ): Promise<DiscoverMapResult> {
@@ -49,6 +50,7 @@ export async function discoverMap(
       environment: options.environment,
       description: `Discovery for Application Test Map "${options.applicationName}"`,
       runExecutionMode: "observe",
+      storageStatePath: options.storageStatePath,
       createdAt: new Date().toISOString(),
     },
     headless: options.headless ?? runtime.config.headless,
@@ -58,6 +60,9 @@ export async function discoverMap(
     environment: options.environment,
     allowedDomains,
   });
+  if (options.storageStatePath) {
+    map.approvedScope.storageStatePath = options.storageStatePath;
+  }
   runtime.testMaps.save(map);
   return { map };
 }
