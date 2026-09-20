@@ -16,9 +16,24 @@ if [ "$node_major" -lt 22 ]; then
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
-  echo "pnpm not found — enabling it via corepack..."
-  corepack enable
-  corepack prepare pnpm@10.34.5 --activate
+  if command -v corepack >/dev/null 2>&1; then
+    echo "pnpm not found — enabling it via corepack..."
+    corepack enable
+    corepack prepare pnpm@10.34.5 --activate
+  else
+    # Node 25+ no longer bundles corepack (it's an opt-in package now), so
+    # `corepack` may not exist even on a fresh Node install. Get corepack
+    # via npm first; if that's unavailable too, fall back to installing
+    # pnpm directly.
+    echo "pnpm not found and no 'corepack' command available — installing corepack via npm..."
+    if command -v npm >/dev/null 2>&1 && npm install -g corepack; then
+      corepack enable
+      corepack prepare pnpm@10.34.5 --activate
+    else
+      echo "corepack install failed — installing pnpm directly via npm..."
+      npm install -g pnpm@10.34.5
+    fi
+  fi
 fi
 
 echo "Installing dependencies..."
