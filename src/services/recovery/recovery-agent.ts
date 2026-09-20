@@ -21,7 +21,21 @@ export async function attemptStepRecovery(options: {
   stepIndex: number;
   failureSummary: string;
   budget: number;
-}): Promise<{ recovered: boolean; usedLocator?: ReturnType<Page["locator"]>; attempts: RecoveryAttempt[] }> {
+}): Promise<{
+  recovered: boolean;
+  usedLocator?: ReturnType<Page["locator"]>;
+  /**
+   * A concrete, re-usable selector string equivalent to whichever
+   * strategy actually recovered the step — e.g. `role=button[name="Add
+   * to cart"]` or `text=Add to cart`. Present only when `recovered` is
+   * true. This is what selector-healing.ts persists back onto the
+   * originating ApplicationTestMap checkpoint step, so the *next* run
+   * finds the element on the first try instead of needing runtime
+   * recovery again.
+   */
+  healedSelector?: string;
+  attempts: RecoveryAttempt[];
+}> {
   const { page, step, stepIndex, failureSummary, budget } = options;
   const attempts: RecoveryAttempt[] = [];
 
@@ -38,6 +52,7 @@ export async function attemptStepRecovery(options: {
       const locator = strategy.locate(page);
       const count = await locator.count();
       if (count === 1) {
+        const healedSelector = strategy.toSelector();
         attempts.push({
           stepIndex,
           checkpoint: describeCheckpoint(step),
@@ -47,8 +62,9 @@ export async function attemptStepRecovery(options: {
           attempt: attemptNumber,
           maxAttempts: bounded.length,
           outcome: "recovered",
+          healedSelector,
         });
-        return { recovered: true, usedLocator: locator, attempts };
+        return { recovered: true, usedLocator: locator, healedSelector, attempts };
       }
       attempts.push({
         stepIndex,
@@ -87,37 +103,63 @@ function describeCheckpoint(step: TestStep): string {
   return step.name ?? step.selector ?? step.role ?? step.kind;
 }
 
+/** Escapes a name for embedding inside a Playwright `role=`/CSS-attribute selector-engine string. */
+function escapeForSelectorString(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
 function buildFallbackStrategies(
   step: TestStep,
-): Array<{ label: string; locate: (page: Page) => ReturnType<Page["locator"]> }> {
-  const strategies: Array<{ label: string; locate: (page: Page) => ReturnType<Page["locator"]> }> = [];
+): Array<{ label: string; locate: (page: Page) => ReturnType<Page["locator"]>; toSelector: () => string }> {
+  const strategies: Array<{
+    label: string;
+    locate: (page: Page) => ReturnType<Page["locator"]>;
+    toSelector: () => string;
+  }> = [];
   const name = step.name;
 
   if (name) {
+    const escapedName = escapeForSelectorString(name);
     if (step.role) {
       // Original was role+name but ambiguous/failed name casing — try a looser role match.
       strategies.push({
         label: `role "${step.role}" with loose name match`,
         locate: (page) =>
           page.getByRole(step.role as Parameters<Page["getByRole"]>[0], { name, exact: false }),
+        toSelector: () => `role=${step.role}[name="${escapedName}" i]`,
       });
     } else {
+      // Two separate, ordered role checks instead of one combined
+      // `.or(...)` locator — each one maps to a concrete, re-usable
+      // `role=` selector string when it is the strategy that recovers.
       strategies.push({
-        label: "common interactive roles (button/link) with exact name",
-        locate: (page) => page.getByRole("button", { name }).or(page.getByRole("link", { name })),
+        label: "button role with exact name",
+        locate: (page) => page.getByRole("button", { name }),
+        toSelector: () => `role=button[name="${escapedName}"]`,
+      });
+      strategies.push({
+        label: "link role with exact name",
+        locate: (page) => page.getByRole("link", { name }),
+        toSelector: () => `role=link[name="${escapedName}"]`,
       });
     }
     strategies.push({
       label: "visible text (loose match)",
       locate: (page) => page.getByText(name, { exact: false }),
+      toSelector: () => `text=${name}`,
     });
-    strategies.push({ label: "accessible label", locate: (page) => page.getByLabel(name, { exact: false }) });
+    strategies.push({
+      label: "accessible label",
+      locate: (page) => page.getByLabel(name, { exact: false }),
+      toSelector: () => `[aria-label="${escapedName}"]`,
+    });
   }
 
   if (step.selector) {
     strategies.push({
       label: "declared selector",
       locate: (page) => page.locator(step.selector as string),
+      toSelector: () => step.selector as string,
     });
   }
 

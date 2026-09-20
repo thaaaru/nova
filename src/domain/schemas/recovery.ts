@@ -22,6 +22,15 @@ export const RecoveryAttemptSchema = z.object({
   attempt: z.number().int().min(1),
   maxAttempts: z.number().int().min(1),
   outcome: RecoveryOutcomeSchema,
+  /**
+   * A concrete, re-usable selector string equivalent to whichever
+   * strategy resolved the step — present only when `outcome` is
+   * "recovered". Persistent selector healing (selector-healing.ts)
+   * reads this to write the working selector back onto the originating
+   * ApplicationTestMap checkpoint step, so the next run does not need
+   * runtime recovery for the same drift.
+   */
+  healedSelector: z.string().optional(),
 });
 export type RecoveryAttempt = z.infer<typeof RecoveryAttemptSchema>;
 

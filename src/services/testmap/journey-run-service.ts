@@ -6,6 +6,7 @@ import type { ApplicationTestMapRepository } from "../persistence/test-map-repos
 import { MapBackedJourneyRepository } from "../persistence/test-map-repository.js";
 import { buildPlanFromJourney, type JourneyRunContext } from "./map-to-plan.js";
 import { runExecution, runApprove, type ExecutionResultSummary } from "../../cli/commands.js";
+import { applySelectorHeals, deriveHealCandidates } from "./selector-healing.js";
 
 export class JourneyScopeError extends Error {}
 export class FixtureLockedError extends Error {}
@@ -219,10 +220,41 @@ export async function confirmJourneyRun(
         outcome,
         new Date().toISOString(),
       );
+      persistSelectorHeals(runtime, maps, runId, run.testMapContext.mapId, run.testMapContext.journeyId);
     }
     return result;
   } finally {
     await runJourneyCleanup(runtime, maps, runId);
+  }
+}
+
+/**
+ * Self-learning selector healing: reads back the just-completed run's
+ * recorded recovery attempts and writes any `recovered` selector onto
+ * the map's checkpoint steps, so the *next* run of this journey no
+ * longer needs runtime recovery for the same drift. Never touches an
+ * unrecovered/exhausted attempt, and silently no-ops if the map or
+ * journey has since moved on (e.g. curated away mid-run) — a stale run
+ * can never retroactively rewrite a map that changed underneath it.
+ */
+function persistSelectorHeals(
+  runtime: NovaRuntime,
+  maps: ApplicationTestMapRepository,
+  runId: string,
+  mapId: string,
+  journeyId: string,
+): void {
+  const finalRun = runtime.repository.get(runId);
+  const map = maps.get(mapId);
+  const journey = map?.areas.flatMap((area) => area.journeys).find((candidate) => candidate.id === journeyId);
+  if (!finalRun || !map || !journey) {
+    return;
+  }
+  const recoveryAttempts = finalRun.executionResults.flatMap((result) => result.recoveryAttempts);
+  const candidates = deriveHealCandidates(journey, recoveryAttempts);
+  const healedMap = applySelectorHeals(map, candidates);
+  if (healedMap !== map) {
+    maps.save(healedMap);
   }
 }
 
