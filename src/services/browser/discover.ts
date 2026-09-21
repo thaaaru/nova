@@ -15,6 +15,8 @@ export type DiscoverOptions = {
   manifest: TargetManifest;
   maxPages?: number;
   headless?: boolean;
+  /** Fired at each meaningful crawl step so an operator watching `nova discover`/`nova map discover` sees live progress instead of a silent wait; never required, never throws on the caller's behalf. */
+  onProgress?: (message: string) => void;
 };
 
 /**
@@ -41,7 +43,9 @@ export function normalizeUrl(raw: string): string {
  * read-only-by-default posture the whole product commits to.
  */
 export async function discoverApplication(options: DiscoverOptions): Promise<DiscoverySnapshot> {
+  const log = options.onProgress ?? (() => undefined);
   const maxPages = options.maxPages ?? 5;
+  log("Launching browser...");
   const browser = await chromium.launch({ headless: options.headless ?? true });
   const visitedUrls: string[] = [];
   const pages: DiscoveredPage[] = [];
@@ -74,9 +78,11 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
         }
       });
 
+      log(`Visiting ${url}`);
       try {
         await page.goto(url, { waitUntil: "load", timeout: 15_000 });
       } catch {
+        log(`Skipped ${url} (failed to load)`);
         await page.close();
         continue;
       }
@@ -119,6 +125,9 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
         links,
         consoleErrors,
       });
+      log(
+        `Visited ${page.url()} \u2014 "${title}" (${forms.length} form(s), ${buttons.length} button(s), ${links.length} link(s))`,
+      );
 
       for (const link of links) {
         if (!link.href) {
@@ -139,6 +148,7 @@ export async function discoverApplication(options: DiscoverOptions): Promise<Dis
   } finally {
     await browser.close();
   }
+  log(`Discovery complete: ${pages.length} page(s) visited`);
 
   return {
     runId: options.runId,

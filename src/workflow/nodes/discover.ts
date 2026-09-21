@@ -6,8 +6,11 @@ export type DiscoverDependencies = {
     runId: string;
     manifest: GraphState["run"]["targetManifest"];
     headless?: boolean;
+    onProgress?: (message: string) => void;
   }) => Promise<DiscoverySnapshot>;
   headless?: boolean;
+  /** Forwarded verbatim into every `discover()` call; wired to stderr only by CLI call sites that want live progress (nova discover/map discover) — TUI/MCP leave it unset. */
+  onProgress?: (message: string) => void;
 };
 
 /**
@@ -22,6 +25,7 @@ export function createDiscoverNode(deps: DiscoverDependencies) {
       runId: run.runId,
       manifest: run.targetManifest,
       headless: deps.headless,
+      onProgress: deps.onProgress,
     });
 
     return {

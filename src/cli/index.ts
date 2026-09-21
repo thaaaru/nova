@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { Command, Option } from "commander";
 
 import { buildRuntime } from "./context.js";
+import type { RuntimeHooks } from "./context.js";
 import { loadConfig } from "../config/index.js";
 import { runApprove, runDiscover, runExecution, runPlan, runReport } from "./commands.js";
 import { serveMcp } from "../mcp/server.js";
@@ -45,6 +46,7 @@ import {
 import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./interactive/commands/report.js";
 import { runDiscoverWizard } from "./interactive/discover-wizard.js";
 import { checkForUpdatesIfDue } from "../services/update-check/index.js";
+import { applyUpdate } from "../services/update-check/apply-update.js";
 
 /** Commander's recipe for a repeatable option (e.g. `--fixture a --fixture b`). */
 function collect(value: string, previous: string[]): string[] {
@@ -56,6 +58,18 @@ function withInteractivityOptions(command: Command): Command {
   return command
     .addOption(new Option("--interactive", "Force guided review, even when every input is already supplied"))
     .addOption(new Option("--non-interactive", "Never prompt; fail with every missing input listed at once"));
+}
+
+/**
+ * Live discover/execute progress to stderr — never stdout, so `nova mcp
+ * serve`'s JSON-RPC transport and any piped stdout stay untouched
+ * regardless of which command is running. Only the plain CLI commands
+ * that showed no feedback while crawling/executing (discover, map
+ * discover, run, journey run/confirm) opt into this; the TUI has its own
+ * screens and MCP stays exactly as silent as before.
+ */
+function progressHooks(): RuntimeHooks {
+  return { onProgress: (message: string) => process.stderr.write(`  ${message}\n`) };
 }
 
 /** The highest checkpoint risk level on a journey — display-only, mirrors the same precedence map-to-plan.ts uses to pick a case's risk level. */
@@ -101,6 +115,35 @@ program
     process.stdout.write("Next: nova discover --target <url>\n");
   });
 
+program
+  .command("update")
+  .description("Force-check GitHub for updates and apply them now: fetch, fast-forward, reinstall, rebuild.")
+  .option(
+    "--force",
+    "Discard any uncommitted changes or diverged local commits and hard-reset to origin/main",
+    false,
+  )
+  .action(async (options: { force: boolean }) => {
+    try {
+      const result = await applyUpdate({
+        repoDir: resolve(__dirname, "../.."),
+        force: options.force,
+        onProgress: (message) => process.stdout.write(`${message}\n`),
+      });
+      if (result.updated) {
+        process.stdout.write(
+          `Updated ${result.fromCommit.slice(0, 7)} -> ${result.toCommit.slice(0, 7)}. ` +
+            "Restart any running `nova` process to use the new build.\n",
+        );
+      } else {
+        process.stdout.write(`Already up to date (${result.toCommit.slice(0, 7)}).\n`);
+      }
+    } catch (error) {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    }
+  });
+
 const discoverCommand = withInteractivityOptions(
   program
     .command("discover")
@@ -122,7 +165,7 @@ discoverCommand.action(
     interactive?: boolean;
     nonInteractive?: boolean;
   }) => {
-    const runtime = buildRuntime();
+    const runtime = buildRuntime({}, progressHooks());
     try {
       const result = await runDiscover(runtime, {
         target: options.target,
@@ -257,7 +300,7 @@ program
   .requiredOption("--plan <planId>", "Plan id (same as the run id)")
   .option("--no-headless", "Run the browser headed")
   .action(async (options: { plan: string; headless: boolean }) => {
-    const runtime = buildRuntime();
+    const runtime = buildRuntime({}, progressHooks());
     try {
       const result = await runExecution(runtime, options);
       process.stdout.write(`Run ${result.runId} finished: ${result.status}.\n`);
@@ -333,6 +376,7 @@ mapDiscoverCommand.action(
         environment: input.env,
         storageStatePath: options.storageState,
         headless: options.headless,
+        onProgress: progressHooks().onProgress,
       });
       const journeyCount = result.map.areas.reduce((total, area) => total + area.journeys.length, 0);
       process.stdout.write(
@@ -605,7 +649,7 @@ journeyRunCommand.action(
       nonInteractive?: boolean;
     },
   ) => {
-    const runtime = buildRuntime();
+    const runtime = buildRuntime({}, progressHooks());
     try {
       const interactivity = detectInteractivity(options as InteractivityOptions);
       const fields = buildJourneyRunFields(runtime);
@@ -664,7 +708,7 @@ journeyCommand
   )
   .option("--reviewer <name>", "Reviewer identity recorded in the audit log")
   .action(async (runId: string, options: { reviewer?: string }) => {
-    const runtime = buildRuntime();
+    const runtime = buildRuntime({}, progressHooks());
     try {
       const reviewer = options.reviewer ?? process.env.NOVA_REVIEWER ?? "cli-operator";
       const result = await confirmRun(runtime, runId, reviewer);

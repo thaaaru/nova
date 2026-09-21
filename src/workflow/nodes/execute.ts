@@ -11,10 +11,13 @@ export type ExecuteDependencies = {
     artifactsDirectory: string;
     headless?: boolean;
     secretResolver: SecretResolver;
+    onProgress?: (message: string) => void;
   }) => Promise<ExecutionResult>;
   secretResolver: SecretResolver;
   artifactsDirectory: string;
   headless?: boolean;
+  /** Forwarded verbatim into every `executeTestCase()` call; wired to stderr only by CLI call sites that want live progress (nova run/nova journey run) — TUI/MCP leave it unset. */
+  onProgress?: (message: string) => void;
 };
 
 /**
@@ -66,6 +69,7 @@ export function createExecuteNode(deps: ExecuteDependencies) {
         continue;
       }
 
+      deps.onProgress?.(`Case ${results.length + 1}/${run.testPlan.cases.length}: ${testCase.title}`);
       const result = await deps.executeTestCase({
         runId: run.runId,
         manifest: run.targetManifest,
@@ -73,6 +77,7 @@ export function createExecuteNode(deps: ExecuteDependencies) {
         artifactsDirectory: deps.artifactsDirectory,
         headless: deps.headless,
         secretResolver: deps.secretResolver,
+        onProgress: deps.onProgress,
       });
       results.push(result);
     }

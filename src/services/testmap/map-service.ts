@@ -37,6 +37,7 @@ export async function discoverMap(
     environment: ApplicationTestMapEnvironment;
     storageStatePath?: string;
     headless?: boolean;
+    onProgress?: (message: string) => void;
   },
 ): Promise<DiscoverMapResult> {
   const allowedDomains = [new URL(options.target).hostname];
@@ -54,6 +55,7 @@ export async function discoverMap(
       createdAt: new Date().toISOString(),
     },
     headless: options.headless ?? runtime.config.headless,
+    onProgress: options.onProgress,
   });
   const map = buildDraftMapFromDiscovery(snapshot, {
     applicationName: options.applicationName,

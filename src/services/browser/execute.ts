@@ -23,6 +23,8 @@ export type ExecuteCaseOptions = {
   artifactsDirectory: string;
   headless?: boolean;
   secretResolver: SecretResolver;
+  /** Fired at each meaningful execution step so an operator watching `nova run`/`nova journey run` sees live progress instead of a silent wait; never required, never throws on the caller's behalf. */
+  onProgress?: (message: string) => void;
 };
 
 /**
@@ -34,19 +36,27 @@ export type ExecuteCaseOptions = {
  * retryPolicy, never an ad hoc "try again" decision.
  */
 export async function executeTestCase(options: ExecuteCaseOptions): Promise<ExecutionResult> {
+  const log = options.onProgress ?? (() => undefined);
   const startedAt = new Date().toISOString();
   const maxAttempts = options.testCase.retryPolicy.maxAttempts;
   let lastResult: ExecutionResult | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    log(
+      maxAttempts > 1
+        ? `Running "${options.testCase.title}" (attempt ${attempt}/${maxAttempts})`
+        : `Running "${options.testCase.title}"`,
+    );
     lastResult = await runOnce(options, attempt, startedAt);
     if (lastResult.assertionResults.every((assertion) => assertion.passed) && !lastResult.error) {
+      log(`"${options.testCase.title}" passed`);
       return lastResult;
     }
     if (attempt < maxAttempts && options.testCase.retryPolicy.backoffMs > 0) {
       await delay(options.testCase.retryPolicy.backoffMs);
     }
   }
+  log(`"${options.testCase.title}" failed`);
   return lastResult as ExecutionResult;
 }
 
@@ -88,21 +98,34 @@ async function runOnce(
       await route.continue();
     });
 
+    const log = options.onProgress ?? (() => undefined);
+    const totalSteps = options.testCase.steps.length;
     for (const [index, step] of options.testCase.steps.entries()) {
       const stepStart = Date.now();
+      log(`Step ${index + 1}/${totalSteps}: ${step.kind}`);
       try {
         await runStep(page, step, options.secretResolver);
         stepResults.push({ stepIndex: index, status: "passed", durationMs: Date.now() - stepStart });
       } catch (error) {
         const failureSummary = error instanceof Error ? error.message : String(error);
+        log(`Step ${index + 1} failed: ${failureSummary}`);
         const recovery = RECOVERABLE_STEP_KINDS.has(step.kind)
-          ? await attemptStepRecovery({
-              page,
-              step,
-              stepIndex: index,
-              failureSummary,
-              budget: options.testCase.recoveryBudget,
-            })
+          ? await (async () => {
+              log(`Attempting selector recovery for step ${index + 1}...`);
+              const outcome = await attemptStepRecovery({
+                page,
+                step,
+                stepIndex: index,
+                failureSummary,
+                budget: options.testCase.recoveryBudget,
+              });
+              log(
+                outcome.recovered
+                  ? `Recovery succeeded for step ${index + 1}`
+                  : `Recovery exhausted for step ${index + 1} (${outcome.attempts.length} attempt(s))`,
+              );
+              return outcome;
+            })()
           : { recovered: false, attempts: [] as RecoveryAttempt[] };
         recoveryAttempts.push(...recovery.attempts);
 
@@ -139,9 +162,15 @@ async function runOnce(
       }
     }
 
+    log(`Checking ${options.testCase.assertions.length} assertion(s)...`);
     const assertionResults = await Promise.all(
       options.testCase.assertions.map((assertion) => evaluateAssertion(page, assertion)),
     );
+    for (const assertion of assertionResults) {
+      log(
+        `Assertion ${assertion.kind}: ${assertion.passed ? "passed" : `failed (expected ${assertion.expected}, observed ${assertion.observed ?? "n/a"})`}`,
+      );
+    }
 
     const tracePath = join(outputDirectory, `trace-attempt-${attempt}.zip`);
     await context.tracing.stop({ path: tracePath });

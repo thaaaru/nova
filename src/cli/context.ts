@@ -20,7 +20,18 @@ export type NovaRuntime = {
   graph: NovaGraph;
 };
 
-export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
+export type RuntimeHooks = {
+  /**
+   * Fired at each meaningful discover/execute step. Left unset by default
+   * — MCP and the TUI both call buildRuntime() with no hooks and stay
+   * exactly as silent as before. Only the plain CLI commands that
+   * explicitly want live progress (`nova discover`, `nova map discover`,
+   * `nova run`, `nova journey run`) wire this to stderr.
+   */
+  onProgress?: (message: string) => void;
+};
+
+export function buildRuntime(overrides: Partial<NovaConfig> = {}, hooks: RuntimeHooks = {}): NovaRuntime {
   const config = loadConfig(overrides);
   const repository = new SqliteRunRepository(config.databasePath);
   const testMapDatabasePath = config.databasePath.replace(/\.sqlite$/, "") + "-test-map.sqlite";
@@ -29,7 +40,7 @@ export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
   const checkpointDatabasePath = config.databasePath.replace(/\.sqlite$/, "") + "-checkpoints.sqlite";
 
   const graph = buildNovaGraph({
-    discover: { discover: discoverApplication, headless: config.headless },
+    discover: { discover: discoverApplication, headless: config.headless, onProgress: hooks.onProgress },
     // The orchestrator's LLM integration is opt-in: only wired when
     // DEEPSEEK_API_KEY is present in the environment (see config/index.ts).
     // Without it, plan stays fully deterministic — no key, no network
@@ -47,6 +58,7 @@ export function buildRuntime(overrides: Partial<NovaConfig> = {}): NovaRuntime {
       secretResolver,
       artifactsDirectory: config.artifactsDirectory,
       headless: config.headless,
+      onProgress: hooks.onProgress,
     },
     report: { artifactsDirectory: config.artifactsDirectory },
     checkpointDatabasePath,
