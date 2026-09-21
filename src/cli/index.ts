@@ -43,6 +43,7 @@ import {
   journeyApproveResolveConfig,
 } from "./interactive/commands/journey-approve.js";
 import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./interactive/commands/report.js";
+import { runDiscoverWizard } from "./interactive/discover-wizard.js";
 
 /** Commander's recipe for a repeatable option (e.g. `--fixture a --fixture b`). */
 function collect(value: string, previous: string[]): string[] {
@@ -99,33 +100,84 @@ program
     process.stdout.write("Next: nova discover --target <url>\n");
   });
 
-program
-  .command("discover")
-  .description("Crawl a target and capture a read-only application map.")
-  .requiredOption("--target <url>", "Target application URL")
-  .option("--manifest <path>", "Path to an approved TargetManifest JSON file")
-  .option(
-    "--storage-state <path>",
-    "Path to a session captured by `nova login` — crawl as that signed-in user",
-  )
-  .option("--no-headless", "Run the browser headed")
-  .action(
-    async (options: { target: string; manifest?: string; storageState?: string; headless: boolean }) => {
-      const runtime = buildRuntime();
-      try {
-        const result = await runDiscover(runtime, {
-          target: options.target,
-          manifest: options.manifest,
-          storageState: options.storageState,
-          headless: options.headless,
-        });
-        process.stdout.write(`Run ${result.runId}: discovered ${result.pageCount} page(s).\n`);
+const discoverCommand = withInteractivityOptions(
+  program
+    .command("discover")
+    .description("Crawl a target and capture a read-only application map.")
+    .requiredOption("--target <url>", "Target application URL")
+    .option("--manifest <path>", "Path to an approved TargetManifest JSON file")
+    .option(
+      "--storage-state <path>",
+      "Path to a session captured by `nova login` — crawl as that signed-in user",
+    )
+    .option("--no-headless", "Run the browser headed"),
+);
+discoverCommand.action(
+  async (options: {
+    target: string;
+    manifest?: string;
+    storageState?: string;
+    headless: boolean;
+    interactive?: boolean;
+    nonInteractive?: boolean;
+  }) => {
+    const runtime = buildRuntime();
+    try {
+      const result = await runDiscover(runtime, {
+        target: options.target,
+        manifest: options.manifest,
+        storageState: options.storageState,
+        headless: options.headless,
+      });
+      process.stdout.write(`Run ${result.runId}: discovered ${result.pageCount} page(s).\n`);
+
+      const interactivity = detectInteractivity(options as InteractivityOptions);
+      if (!interactivity.promptingAllowed) {
         process.stdout.write(`Next: nova plan --objective "<your objective>" --run ${result.runId}\n`);
-      } finally {
-        runtime.repository.close();
+        return;
       }
-    },
-  );
+
+      const session = createPromptSession();
+      try {
+        const wizard = await runDiscoverWizard(runtime, session, result);
+        if (!wizard.proceeded) {
+          process.stdout.write(`Next: nova plan --objective "<your objective>" --run ${result.runId}\n`);
+          return;
+        }
+        process.stdout.write(
+          `Plan ${wizard.plan.planId} ready for review: ${wizard.plan.cases.length} case(s).\n`,
+        );
+        for (const testCase of wizard.plan.cases) {
+          process.stdout.write(
+            `  [${testCase.riskLevel}/${testCase.executionMode}] ${testCase.id}: ${testCase.title}\n`,
+          );
+        }
+        if (!wizard.approval) {
+          process.stdout.write(`Next: nova approve --plan ${wizard.plan.planId}\n`);
+          return;
+        }
+        process.stdout.write(`Plan ${wizard.approval.runId} ${wizard.approval.decision}.\n`);
+        if (wizard.approval.decision !== "approved" || !wizard.execution) {
+          return;
+        }
+        process.stdout.write(`Run ${wizard.execution.runId} finished: ${wizard.execution.status}.\n`);
+        process.stdout.write(`${JSON.stringify(wizard.execution.classificationCounts)}\n`);
+        if (!wizard.report) {
+          process.stdout.write(`Next: nova report --run ${wizard.execution.runId}\n`);
+          return;
+        }
+        process.stdout.write(`JSON:     ${wizard.report.jsonPath}\n`);
+        process.stdout.write(`JUnit:    ${wizard.report.junitPath}\n`);
+        process.stdout.write(`Markdown: ${wizard.report.markdownPath}\n`);
+        process.stdout.write(`HTML:     ${wizard.report.htmlPath}\n`);
+      } finally {
+        session.close();
+      }
+    } finally {
+      runtime.repository.close();
+    }
+  },
+);
 
 program
   .command("login")
