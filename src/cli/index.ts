@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { mkdirSync, existsSync, copyFileSync } from "node:fs";
+import { z } from "zod";
+import { mkdirSync, existsSync, copyFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -13,10 +14,11 @@ import { serveMcp } from "../mcp/server.js";
 import { runTui } from "../tui/index.js";
 import { captureStorageState } from "../services/browser/login.js";
 import type { UserJourney, VerificationResult } from "../domain/index.js";
-import { VerbosityLevelSchema } from "../domain/index.js";
+import { AssertionSchema, TestStepSchema, VerbosityLevelSchema } from "../domain/index.js";
 import {
   approveJourney,
   confirmRun,
+  curateCheckpoint,
   describeTest,
   discoverMap,
   getMap,
@@ -75,6 +77,10 @@ function progressHooks(): RuntimeHooks {
   return { onProgress: (message: string) => process.stderr.write(`  ${message}\n`) };
 }
 
+const JourneyCurationFileSchema = z.object({
+  steps: z.array(TestStepSchema).min(1),
+  assertions: z.array(AssertionSchema).min(1),
+});
 /** The highest checkpoint risk level on a journey — display-only, mirrors the same precedence map-to-plan.ts uses to pick a case's risk level. */
 function journeyRiskLevel(journey: UserJourney): string {
   if (journey.checkpoints.some((checkpoint) => checkpoint.riskLevel === "high")) {
@@ -703,6 +709,80 @@ journeyApproveCommand.action(
       if (journey.status === "approved") {
         process.stdout.write(`Next: nova journey run ${journey.id} --map ${input.map} --non-interactive\n`);
       }
+    } finally {
+      closeTrackedRuntime(runtime);
+    }
+  },
+);
+
+const journeyCurateCommand = journeyCommand
+  .command("curate <journeyId>")
+  .description(
+    "Write concrete steps/assertions onto a draft journey checkpoint from a JSON file, so it can be approved to run.",
+  )
+  .requiredOption("--map <mapId>", "Application Test Map id")
+  .option(
+    "--checkpoint <checkpointId>",
+    "Checkpoint id to curate (defaults to the journey's only checkpoint)",
+  )
+  .requiredOption(
+    "--steps-file <path>",
+    'Path to a JSON file: { "steps": TestStep[], "assertions": Assertion[] }',
+  )
+  .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false);
+journeyCurateCommand.action(
+  async (
+    journeyId: string,
+    options: { map: string; checkpoint?: string; stepsFile: string; json: boolean },
+  ) => {
+    const runtime = trackedRuntime();
+    try {
+      const journey = listJourneys(runtime, options.map).find((candidate) => candidate.id === journeyId);
+      if (!journey) {
+        throw new Error(`Unknown journey ${journeyId} in map ${options.map}.`);
+      }
+      const checkpointId = options.checkpoint ?? journey.checkpoints[0]?.id;
+      if (!checkpointId) {
+        throw new Error(`Journey ${journeyId} has no checkpoints to curate.`);
+      }
+      if (!journey.checkpoints.some((checkpoint) => checkpoint.id === checkpointId)) {
+        throw new Error(`Unknown checkpoint ${checkpointId} on journey ${journeyId}.`);
+      }
+      let raw: unknown;
+      try {
+        raw = JSON.parse(readFileSync(resolve(options.stepsFile), "utf8"));
+      } catch (error) {
+        throw new Error(
+          `Could not read/parse --steps-file ${options.stepsFile}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+      const parsed = JourneyCurationFileSchema.parse(raw);
+      const updated = curateCheckpoint(
+        runtime,
+        options.map,
+        journeyId,
+        checkpointId,
+        parsed.steps,
+        parsed.assertions,
+      );
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            journeyId: updated.id,
+            checkpointId,
+            stepCount: parsed.steps.length,
+            assertionCount: parsed.assertions.length,
+          }),
+        );
+        return;
+      }
+      process.stdout.write(
+        `Checkpoint ${checkpointId} on journey ${journeyId} now has ${parsed.steps.length} step(s) and ` +
+          `${parsed.assertions.length} assertion(s).\n`,
+      );
+      process.stdout.write(`Next: nova journey approve ${journeyId} --map ${options.map}\n`);
     } finally {
       closeTrackedRuntime(runtime);
     }

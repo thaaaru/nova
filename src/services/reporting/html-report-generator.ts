@@ -191,7 +191,9 @@ body {
   color: var(--text);
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
+  overflow-x: hidden;
 }
+html { overflow-x: hidden; }
 main { max-width: 1100px; margin: 0 auto; padding: 0 24px 64px; }
 section { margin-top: 40px; }
 h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
@@ -242,8 +244,8 @@ header.run-header {
 .confidence { font-size: 12px; color: var(--muted); }
 .case-card, .finding-card { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
 .case-card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 8px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 13px; word-break: break-word; overflow-wrap: anywhere; }
 th { color: var(--muted); font-weight: 600; }
 .pass-cell { color: var(--green); }
 .fail-cell { color: var(--red); }

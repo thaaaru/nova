@@ -11,7 +11,7 @@ import type { FieldSpec, ResolveInputsConfig } from "../resolve-inputs.js";
 
 export const MapDiscoverInputSchema = z.object({
   target: z.string().url(),
-  name: z.string().min(1),
+  name: z.string().min(1).optional(),
   env: ApplicationTestMapEnvironmentSchema,
 });
 export type MapDiscoverInput = z.infer<typeof MapDiscoverInputSchema>;
@@ -27,9 +27,10 @@ const fields: FieldSpec[] = [
   {
     key: "name",
     flag: "--name",
-    label: "Application name",
+    label: "Application name (leave blank to let Nova identify it from the crawl)",
     kind: "text",
     defaultValue: (resolved) => (resolved.target ? deriveApplicationName(resolved.target) : undefined),
+    optionalInNonInteractive: true,
     parse: (raw) => {
       const trimmed = raw.trim();
       return trimmed.length > 0

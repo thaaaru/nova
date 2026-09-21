@@ -9,6 +9,7 @@ import { EventFeed } from "../components/EventFeed.js";
 import { RecoveryCard } from "../components/RecoveryCard.js";
 import { makeEvent } from "../services/make-event.js";
 import { filterEventsByVerbosity } from "../services/verbosity.js";
+import { useSpinnerFrame } from "../hooks/useSpinnerFrame.js";
 
 type SimulatedStatus = "pending" | "running" | "passed" | "failed";
 
@@ -30,6 +31,7 @@ type LiveExecutionScreenProps = {
   runtime: NovaRuntime;
   run: TestRunState;
   verbosity: VerbosityLevel;
+  animationEnabled: boolean;
   paused: boolean;
   onTogglePause: () => void;
   onComplete: (finalRun: TestRunState) => void;
@@ -70,6 +72,7 @@ export function LiveExecutionScreen({
   runtime,
   run,
   verbosity,
+  animationEnabled,
   paused,
   onTogglePause,
   onComplete,
@@ -97,6 +100,9 @@ export function LiveExecutionScreen({
   const pausedRef = useRef(false);
 
   pausedRef.current = paused;
+
+  const isInProgress = !stopped && !finalRun && !errorMessage;
+  const spinnerFrame = useSpinnerFrame(isInProgress && !paused, animationEnabled);
 
   function handleStop(): void {
     stoppedRef.current = true;
@@ -262,6 +268,7 @@ export function LiveExecutionScreen({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={palette.border} paddingX={1}>
       <Text bold color={palette.blue}>
+        {isInProgress && !paused && animationEnabled ? `${spinnerFrame} ` : ""}
         LIVE EXECUTION — {plan.id}
       </Text>
       <Text color={palette.muted}>
@@ -290,7 +297,8 @@ export function LiveExecutionScreen({
                     : palette.muted
             }
           >
-            [{statuses[index]}] {testCase.title}
+            {statuses[index] === "running" && spinnerFrame ? `${spinnerFrame} ` : ""}[{statuses[index]}]{" "}
+            {testCase.title}
           </Text>
         ))}
       </Box>

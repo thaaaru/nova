@@ -122,7 +122,7 @@ describe("resolveInputs — nova map discover", () => {
     expect(transcript()).toContain("Summary:");
   });
 
-  it("non-interactive mode never prompts and reports every missing input in one error", async () => {
+  it("non-interactive mode never prompts and reports every missing required input in one error", async () => {
     await expect(resolveInputs(mapDiscoverResolveConfig, {}, NON_INTERACTIVE)).rejects.toThrow(
       NonInteractiveInputError,
     );
@@ -132,9 +132,19 @@ describe("resolveInputs — nova map discover", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(NonInteractiveInputError);
       const message = (error as Error).message;
-      expect(message).toContain("Missing required inputs: --target, --name, --env.");
+      expect(message).toContain("Missing required inputs: --target, --env.");
       expect(message).toContain("nova map discover --target https://teklab.dev --name TekLab --env staging");
     }
+  });
+
+  it("non-interactive mode omits --name instead of failing — discoverMap identifies the application itself", async () => {
+    const resolved = await resolveInputs(
+      mapDiscoverResolveConfig,
+      { target: "https://teklab.dev", env: "staging" },
+      NON_INTERACTIVE,
+    );
+    expect(resolved).toEqual({ target: "https://teklab.dev", env: "staging" });
+    expect(resolved.name).toBeUndefined();
   });
 
   it("non-interactive mode runs directly when every input is already supplied and valid", async () => {

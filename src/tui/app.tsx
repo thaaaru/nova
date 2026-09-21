@@ -505,6 +505,7 @@ export function App({ runtime }: AppProps): React.ReactElement {
           runtime={runtime}
           run={run}
           verbosity={settings.verbosity}
+          animationEnabled={settings.animation}
           paused={executionPaused}
           onTogglePause={() => setExecutionPaused((value) => !value)}
           executor={journeyExecutor}

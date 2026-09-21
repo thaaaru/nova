@@ -99,10 +99,6 @@ export function MapDiscoverScreen({
 
   function submitName(raw: string): void {
     const trimmed = raw.trim();
-    if (trimmed.length === 0) {
-      setError("Enter an application name.");
-      return;
-    }
     setError(undefined);
     setApplicationName(trimmed);
     setStep("environment");
@@ -207,7 +203,7 @@ export function MapDiscoverScreen({
       ) : null}
       {step === "name" ? (
         <>
-          <Text>Application name</Text>
+          <Text>Application name (leave blank to let Nova identify it from the crawl)</Text>
           <TextInput value={nameDraft} onChange={setNameDraft} onSubmit={submitName} />
         </>
       ) : null}
@@ -253,8 +249,16 @@ export function MapDiscoverScreen({
       {step === "confirm" ? (
         <>
           <Text>
-            Crawl <Text color={palette.cyan}>{targetUrl}</Text> as{" "}
-            <Text color={palette.cyan}>{applicationName}</Text> ({environment})
+            Crawl <Text color={palette.cyan}>{targetUrl}</Text>
+            {applicationName ? (
+              <>
+                {" "}
+                as <Text color={palette.cyan}>{applicationName}</Text>
+              </>
+            ) : (
+              <> — Nova will identify the application from the crawl</>
+            )}{" "}
+            ({environment})
             {storageStatePath ? (
               <>
                 {" "}

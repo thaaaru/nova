@@ -109,6 +109,7 @@ describe("a TUI action cannot execute an unapproved run", () => {
         runtime={runtime}
         run={run}
         verbosity="standard"
+        animationEnabled={false}
         paused={false}
         onTogglePause={noop}
         onComplete={noop}

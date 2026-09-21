@@ -5,6 +5,7 @@ import { discoverApplication } from "../services/browser/discover.js";
 import { executeTestCase } from "../services/browser/execute.js";
 import { EnvSecretResolver } from "../services/policy/secret-resolver.js";
 import { createDeepSeekPlanGenerator } from "../services/llm/deepseek-plan-generator.js";
+import { createDeepSeekAppIdentifier, type AppIdentifier } from "../services/llm/deepseek-app-identifier.js";
 import { SqliteRunRepository, type RunRepository } from "../services/persistence/run-repository.js";
 import {
   SqliteApplicationTestMapRepository,
@@ -18,6 +19,13 @@ export type NovaRuntime = {
   repository: RunRepository;
   testMaps: ApplicationTestMapRepository;
   graph: NovaGraph;
+  /**
+   * Optional — omitted whenever no DEEPSEEK_API_KEY is configured, same
+   * gating as the plan node's LLM path. When present, `discoverMap` uses
+   * it to name/describe a freshly crawled application from real page
+   * content instead of the deterministic URL-slug fallback.
+   */
+  appIdentifier?: AppIdentifier;
 };
 
 export type RuntimeHooks = {
@@ -64,7 +72,11 @@ export function buildRuntime(overrides: Partial<NovaConfig> = {}, hooks: Runtime
     checkpointDatabasePath,
   });
 
-  return { config, repository, testMaps, graph };
+  const appIdentifier = config.deepseekApiKey
+    ? createDeepSeekAppIdentifier({ apiKey: config.deepseekApiKey, model: config.deepseekModel })
+    : undefined;
+
+  return { config, repository, testMaps, graph, appIdentifier };
 }
 
 /**

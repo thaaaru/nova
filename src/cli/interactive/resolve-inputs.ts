@@ -23,6 +23,16 @@ export type FieldSpec = {
   defaultValue?: (resolved: Readonly<Record<string, string>>) => string | undefined;
   /** Set only when `defaultValue` is a deterministic fact (e.g. "this journey's environment is its map's environment"), never a guess — allows non-interactive mode to use it without a prompt. */
   nonInteractiveDefault?: boolean;
+  /**
+   * When true, non-interactive mode leaves this field unresolved (absent
+   * from the returned record) instead of failing with a missing-input
+   * error when neither `provided` nor a `nonInteractiveDefault` supplied
+   * a value. Only for fields whose own downstream consumer has a real
+   * fallback of its own (e.g. `discoverMap` identifying the application
+   * from crawled content) — never a silent way to skip a value nothing
+   * else can supply.
+   */
+  optionalInNonInteractive?: boolean;
   /** Normalizes and validates a raw candidate value; the sole place a field's rules live. */
   parse: (raw: string, resolved: Readonly<Record<string, string>>) => FieldParseResult;
 };
@@ -99,6 +109,9 @@ export async function resolveInputs(
       const parsedFallback = fallback !== undefined ? field.parse(fallback, resolved) : undefined;
       if (parsedFallback?.ok) {
         resolved[field.key] = parsedFallback.value;
+        continue;
+      }
+      if (field.optionalInNonInteractive) {
         continue;
       }
       missing.push(field.flag);

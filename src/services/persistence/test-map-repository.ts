@@ -5,8 +5,10 @@ import { dirname } from "node:path";
 import {
   ApplicationTestMapSchema,
   type ApplicationTestMap,
+  type Assertion,
   type TestDataFixture,
   type TestPersona,
+  type TestStep,
   type UserJourney,
 } from "../../domain/index.js";
 
@@ -140,6 +142,13 @@ export interface JourneyRepository {
   list(mapId: string, areaId?: string): UserJourney[];
   get(mapId: string, journeyId: string): UserJourney | undefined;
   setStatus(mapId: string, journeyId: string, status: UserJourney["status"]): UserJourney;
+  setCheckpointSteps(
+    mapId: string,
+    journeyId: string,
+    checkpointId: string,
+    steps: TestStep[],
+    assertions: Assertion[],
+  ): UserJourney;
   recordRunOutcome(
     mapId: string,
     journeyId: string,
@@ -168,6 +177,35 @@ export class MapBackedJourneyRepository implements JourneyRepository {
       throw new Error(`Unknown journey ${journeyId} in map ${mapId}.`);
     }
     const updatedJourney: UserJourney = { ...found.journey, status };
+    const updatedAreas = [...map.areas];
+    const journeys = [...updatedAreas[found.areaIndex].journeys];
+    journeys[found.journeyIndex] = updatedJourney;
+    updatedAreas[found.areaIndex] = { ...updatedAreas[found.areaIndex], journeys };
+    this.maps.save({ ...map, areas: updatedAreas, updatedAt: new Date().toISOString() });
+    return updatedJourney;
+  }
+
+  setCheckpointSteps(
+    mapId: string,
+    journeyId: string,
+    checkpointId: string,
+    steps: TestStep[],
+    assertions: Assertion[],
+  ): UserJourney {
+    const map = this.requireMap(mapId);
+    const found = findJourney(map, journeyId);
+    if (!found) {
+      throw new Error(`Unknown journey ${journeyId} in map ${mapId}.`);
+    }
+    const checkpointIndex = found.journey.checkpoints.findIndex(
+      (checkpoint) => checkpoint.id === checkpointId,
+    );
+    if (checkpointIndex === -1) {
+      throw new Error(`Unknown checkpoint ${checkpointId} on journey ${journeyId}.`);
+    }
+    const checkpoints = [...found.journey.checkpoints];
+    checkpoints[checkpointIndex] = { ...checkpoints[checkpointIndex], steps, assertions };
+    const updatedJourney: UserJourney = { ...found.journey, checkpoints };
     const updatedAreas = [...map.areas];
     const journeys = [...updatedAreas[found.areaIndex].journeys];
     journeys[found.journeyIndex] = updatedJourney;
