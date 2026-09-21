@@ -44,6 +44,7 @@ import {
 } from "./interactive/commands/journey-approve.js";
 import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./interactive/commands/report.js";
 import { runDiscoverWizard } from "./interactive/discover-wizard.js";
+import { checkForUpdatesIfDue } from "../services/update-check/index.js";
 
 /** Commander's recipe for a repeatable option (e.g. `--fixture a --fixture b`). */
 function collect(value: string, previous: string[]): string[] {
@@ -742,7 +743,24 @@ program
     }
   });
 
-program.parseAsync().catch((error: unknown) => {
+async function main(): Promise<void> {
+  // Best-effort, silent-on-failure: never delays a command by more than
+  // its own short internal timeout, and never runs at all in CI or when
+  // NOVA_NO_UPDATE_CHECK is set. Always stderr, never stdout — `nova mcp
+  // serve` uses stdout as its JSON-RPC transport and must stay untouched.
+  try {
+    const notice = await checkForUpdatesIfDue({ databasePath: loadConfig().databasePath });
+    if (notice) {
+      process.stderr.write(`${notice}\n\n`);
+    }
+  } catch {
+    // Never let the update check itself fail a command.
+  }
+
+  await program.parseAsync();
+}
+
+main().catch((error: unknown) => {
   if (error instanceof CancelledInputError) {
     process.stdout.write("Cancelled.\n");
     return;
