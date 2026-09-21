@@ -5,7 +5,7 @@ import type { RunViewModel } from "../../domain/index.js";
 import { palette } from "../theme/palette.js";
 import { KeyHintBar } from "../components/KeyHintBar.js";
 import {
-  MAP_HOME_MENU_ITEMS,
+  buildMapHomeMenuItems,
   type MapHomeMenuOptionId,
   type MapHomeSummary,
 } from "../services/testmap-view-model.js";
@@ -16,6 +16,7 @@ type MapHomeScreenProps = {
   currentRunViewModel?: RunViewModel;
   onSelect: (optionId: MapHomeMenuOptionId) => void;
   onQuit: () => void;
+  onCycleVerbosity: () => void;
   /** False while the `:`-mode command bar owns keyboard input. */
   inputActive?: boolean;
 };
@@ -24,6 +25,7 @@ const HOME_KEY_HINTS = [
   { key: "1-7", label: "Select" },
   { key: "Enter", label: "Select" },
   { key: "up/down", label: "Navigate" },
+  { key: "V", label: "Verbosity" },
   { key: ":", label: "Command" },
   { key: "Q", label: "Quit" },
 ];
@@ -41,27 +43,31 @@ export function MapHomeScreen({
   currentRunViewModel,
   onSelect,
   onQuit,
+  onCycleVerbosity,
   inputActive = true,
 }: MapHomeScreenProps): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0);
-
+  const menuItems = buildMapHomeMenuItems(summary.hasMap);
   useInput(
     (input, key) => {
       if (key.upArrow) {
         setSelectedIndex((index) => Math.max(0, index - 1));
       }
       if (key.downArrow) {
-        setSelectedIndex((index) => Math.min(MAP_HOME_MENU_ITEMS.length - 1, index + 1));
+        setSelectedIndex((index) => Math.min(menuItems.length - 1, index + 1));
       }
       if (key.return) {
-        onSelect(MAP_HOME_MENU_ITEMS[selectedIndex].id);
+        onSelect(menuItems[selectedIndex].id);
       }
       const digit = Number(input);
-      if (Number.isInteger(digit) && digit >= 1 && digit <= MAP_HOME_MENU_ITEMS.length) {
-        onSelect(MAP_HOME_MENU_ITEMS[digit - 1].id);
+      if (Number.isInteger(digit) && digit >= 1 && digit <= menuItems.length) {
+        onSelect(menuItems[digit - 1].id);
       }
       if (input === "q" || input === "Q") {
         onQuit();
+      }
+      if (input === "v" || input === "V") {
+        onCycleVerbosity();
       }
     },
     { isActive: inputActive },
@@ -71,7 +77,9 @@ export function MapHomeScreen({
     <Box flexDirection="column">
       <Box borderStyle="round" borderColor={palette.border} paddingX={1}>
         <Text bold color={palette.cyan}>
-          NOVA — APPLICATION TEST MAP
+          {summary.hasMap
+            ? `NOVA — ${summary.applicationName} / ${summary.environment}`
+            : "NOVA — APPLICATION TEST MAP"}
         </Text>
       </Box>
       <Box
@@ -81,7 +89,7 @@ export function MapHomeScreen({
         paddingX={1}
         marginTop={1}
       >
-        {MAP_HOME_MENU_ITEMS.map((item, index) => (
+        {menuItems.map((item, index) => (
           <Text
             key={item.id}
             color={index === selectedIndex ? palette.cyan : palette.foreground}
@@ -107,22 +115,20 @@ export function MapHomeScreen({
         ) : (
           <>
             <Text>
-              <Text color={palette.muted}>Application: </Text>
-              {summary.applicationName} <Text color={palette.muted}>({summary.environment})</Text>
+              <Text color={palette.muted}>Environment: </Text>
+              {summary.environment}
             </Text>
             <Text>
-              <Text color={palette.muted}>Latest run outcome: </Text>
+              <Text color={palette.muted}>Policy: </Text>
+              {summary.executionModeLabel}
+            </Text>
+            <Text>
+              <Text color={palette.muted}>Latest run: </Text>
               {summary.latestRunOutcome ?? "No runs yet"}
             </Text>
             <Text>
               <Text color={palette.muted}>Approved journeys: </Text>
               {summary.approvedJourneyCount}
-              <Text color={palette.muted}> · Needing review: </Text>
-              {summary.journeysNeedingReviewCount}
-            </Text>
-            <Text>
-              <Text color={palette.muted}>Execution policy: </Text>
-              {summary.executionModeLabel}
             </Text>
           </>
         )}

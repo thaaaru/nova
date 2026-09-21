@@ -14,6 +14,18 @@ type SimulatedStatus = "pending" | "running" | "passed" | "failed";
 
 const SIMULATION_TICK_MS = 900;
 
+/** `Nh NNm NNs`, omitting the hour component when it is zero. */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}h ${pad(minutes)}m ${pad(seconds)}s` : `${minutes}m ${pad(seconds)}s`;
+}
+
+const RECOVERY_DECISION_OPTIONS = ["Continue automatically", "Stop run"] as const;
+
 type LiveExecutionScreenProps = {
   runtime: NovaRuntime;
   run: TestRunState;
@@ -71,13 +83,14 @@ export function LiveExecutionScreen({
   const cases = plan?.cases ?? [];
 
   const [statuses, setStatuses] = useState<SimulatedStatus[]>(() => cases.map(() => "pending"));
-  const [, setRunningIndex] = useState(0);
+  const [runningIndex, setRunningIndex] = useState(0);
   const [stopped, setStopped] = useState(false);
   const [finalRun, setFinalRun] = useState<TestRunState | undefined>(undefined);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [showEvidence, setShowEvidence] = useState(false);
   const [showRecoveryGateDialog, setShowRecoveryGateDialog] = useState(false);
+  const [recoveryDialogIndex, setRecoveryDialogIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const startedAtRef = useRef(Date.now());
   const stoppedRef = useRef(false);
@@ -85,24 +98,55 @@ export function LiveExecutionScreen({
 
   pausedRef.current = paused;
 
+  function handleStop(): void {
+    stoppedRef.current = true;
+    setStopped(true);
+    onStop();
+  }
+
   useInput(
     (input, key) => {
-      if (key.escape && showRecoveryGateDialog) {
-        setShowRecoveryGateDialog(false);
+      if (showRecoveryGateDialog) {
+        if (key.escape) {
+          setShowRecoveryGateDialog(false);
+          return;
+        }
+        if (key.upArrow) {
+          setRecoveryDialogIndex((index) => Math.max(0, index - 1));
+        }
+        if (key.downArrow) {
+          setRecoveryDialogIndex((index) => Math.min(RECOVERY_DECISION_OPTIONS.length - 1, index + 1));
+        }
+        if (key.return) {
+          if (recoveryDialogIndex === 0) {
+            setShowRecoveryGateDialog(false);
+          } else {
+            handleStop();
+          }
+          return;
+        }
+        const digit = Number(input);
+        if (digit === 1) {
+          setShowRecoveryGateDialog(false);
+          return;
+        }
+        if (digit === 2) {
+          handleStop();
+          return;
+        }
         return;
       }
       if (input === "p") {
         onTogglePause();
       }
       if (input === "s" || key.escape) {
-        stoppedRef.current = true;
-        setStopped(true);
-        onStop();
+        handleStop();
       }
       if (input === "e") {
         setShowEvidence((value) => !value);
       }
       if (input === "a") {
+        setRecoveryDialogIndex(0);
         setShowRecoveryGateDialog(true);
       }
       if (input === "v" || input === "V") {
@@ -210,13 +254,20 @@ export function LiveExecutionScreen({
   const activeRecovery = finalRun?.executionResults
     .flatMap((execution) => execution.recoveryAttempts.map((attempt) => ({ execution, attempt })))
     .at(0);
+  const recoveryCount = (finalRun?.executionResults ?? []).reduce(
+    (total, execution) => total + execution.recoveryAttempts.length,
+    0,
+  );
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={palette.border} paddingX={1}>
       <Text bold color={palette.blue}>
         LIVE EXECUTION — {plan.id}
       </Text>
-      <Text color={palette.muted}>Elapsed: {(elapsedMs / 1000).toFixed(0)}s</Text>
+      <Text color={palette.muted}>
+        Checkpoint {Math.min(runningIndex + 1, cases.length)} of {cases.length} · Elapsed:{" "}
+        {formatElapsed(elapsedMs)} · Recovery: {recoveryCount}
+      </Text>
       <Text>
         <Text color={palette.green}>{counts.passed} passed</Text>,{" "}
         <Text color={palette.red}>{counts.failed} failed</Text>, {counts.pending} pending
@@ -282,17 +333,33 @@ export function LiveExecutionScreen({
         </Box>
       ) : null}
       {showRecoveryGateDialog ? (
-        <Box borderStyle="single" borderColor={palette.amber} paddingX={1} marginTop={1}>
-          <Text color={palette.amber}>
-            No approval needed — recovery is bounded and policy-safe. Nova's recovery strategy never touches
-            scope, secrets, or approval; it only retries alternate locators for the same declared element,
-            capped by the case's recovery budget. [Esc] Dismiss
+        <Box
+          flexDirection="column"
+          borderStyle="single"
+          borderColor={palette.amber}
+          paddingX={1}
+          marginTop={1}
+        >
+          <Text bold color={palette.amber}>
+            Recovery is bounded and policy-safe — only retries alternate locators for the same declared
+            element, capped by the case's recovery budget. It never touches scope, secrets, or approval.
           </Text>
+          {RECOVERY_DECISION_OPTIONS.map((option, index) => (
+            <Text
+              key={option}
+              color={index === recoveryDialogIndex ? palette.cyan : palette.foreground}
+              bold={index === recoveryDialogIndex}
+            >
+              {index === recoveryDialogIndex ? "> " : "  "}
+              {index + 1}. {option}
+            </Text>
+          ))}
+          <Text color={palette.muted}>[Enter] Select [Esc] Dismiss</Text>
         </Box>
       ) : null}
       <EventFeed events={filterEventsByVerbosity(events, verbosity)} />
       <Text color={palette.muted}>
-        [P] {paused ? "Resume" : "Pause"} readout [S/Esc] Stop [E] Evidence [A] Recovery gate info [V]
+        [P] {paused ? "Resume" : "Pause"} readout [S/Esc] Stop [E] Evidence [A] Recovery decision [V]
         Verbosity [:] Command
       </Text>
     </Box>

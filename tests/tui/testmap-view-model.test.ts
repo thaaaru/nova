@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { sampleApplicationTestMap } from "../../fixtures/sample-application-test-map.js";
 import {
-  MAP_HOME_MENU_ITEMS,
   buildAreaSummaries,
+  buildMapHomeMenuItems,
   buildMapHomeSummary,
   estimateJourneyDurationSeconds,
   formatDurationLabel,
@@ -14,14 +14,26 @@ import {
   selectActiveMap,
 } from "../../src/tui/services/testmap-view-model.js";
 
-describe("MAP_HOME_MENU_ITEMS", () => {
-  it("has exactly the eight numbered options from the product spec", () => {
-    expect(MAP_HOME_MENU_ITEMS.map((item) => `${item.number}. ${item.label}`)).toEqual([
+describe("buildMapHomeMenuItems", () => {
+  it("offers the seven guided options from the product spec once a map exists", () => {
+    expect(buildMapHomeMenuItems(true).map((item) => `${item.number}. ${item.label}`)).toEqual([
+      "1. Test an application area",
+      "2. Describe a test",
+      "3. Run recommended regression tests",
+      "4. Explore or update application map",
+      "5. Review failures and recoveries",
+      "6. Open recent reports",
+      "7. Advanced command mode",
+    ]);
+  });
+
+  it("prepends 'Discover an application' as an empty-state affordance when there is no map yet", () => {
+    expect(buildMapHomeMenuItems(false).map((item) => `${item.number}. ${item.label}`)).toEqual([
       "1. Discover an application",
       "2. Test an application area",
       "3. Describe a test",
       "4. Run recommended regression tests",
-      "5. Explore and update application map",
+      "5. Explore or update application map",
       "6. Review failures and recoveries",
       "7. Open recent reports",
       "8. Advanced command mode",

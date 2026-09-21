@@ -2,16 +2,16 @@ import type { RecoveryAttempt, VerbosityLevel } from "../../domain/index.js";
 
 /**
  * Translates one real RecoveryAttempt into the QA-language phrasing the
- * product spec calls for (Observed / Nova proposes / Recovery: Attempt N
- * of M), sourced only from RecoveryAttempt's own fields — never invented.
- * At standard verbosity this also hides internal locator-strategy
- * language (`attempt.action`'s "declared selector"/"role ... loose name
- * match" wording, `attempt.checkpoint`'s raw-selector fallback from
- * `describeCheckpoint` in recovery-agent.ts) behind a generic, honest
- * description of what recovery does; the same verbosity system that
- * already tiers diagnostic-only event-feed detail (see services/
- * verbosity.ts) is reused here, surfacing the raw strategy/locator text
- * only at "diagnostic" verbosity.
+ * product spec calls for (RECOVERY IN PROGRESS / Observed / Nova will /
+ * Attempt N of M), sourced only from RecoveryAttempt's own fields — never
+ * invented. At standard verbosity this also hides internal
+ * locator-strategy language (`attempt.action`'s "declared selector"/"role
+ * ... loose name match" wording, `attempt.checkpoint`'s raw-selector
+ * fallback from `describeCheckpoint` in recovery-agent.ts) behind a
+ * generic, honest description of what recovery does; the same verbosity
+ * system that already tiers diagnostic-only event-feed detail (see
+ * services/ verbosity.ts) is reused here, surfacing the raw
+ * strategy/locator text only at "diagnostic" verbosity.
  */
 
 const LOOKS_LIKE_RAW_LOCATOR = /^[.#[]/;
@@ -24,15 +24,15 @@ function isInternalLocatorDetail(text: string): boolean {
 export type RecoveryCopy = {
   header: string;
   observed: string;
-  proposal: string;
+  plan: string;
   attemptLabel: string;
   /** Only set at "diagnostic" verbosity — the raw strategy label and locator hint. */
   diagnosticDetail?: string;
 };
 
-const GENERIC_PROPOSAL =
-  "Nova proposes rediscovering the approved control using an alternate accessibility signal and " +
-  "resuming from the last completed checkpoint.";
+const GENERIC_PLAN =
+  "Nova will rediscover the approved control using an alternate accessibility signal and " +
+  "resume from the last completed checkpoint.";
 
 export function buildRecoveryCopy(attempt: RecoveryAttempt, verbosity: VerbosityLevel): RecoveryCopy {
   const showDiagnostic = verbosity === "diagnostic";
@@ -40,13 +40,12 @@ export function buildRecoveryCopy(attempt: RecoveryAttempt, verbosity: Verbosity
     !showDiagnostic && isInternalLocatorDetail(attempt.checkpoint)
       ? "Checkpoint action could not be completed."
       : `${attempt.checkpoint} could not be completed.`;
-  const proposal =
-    showDiagnostic || !isInternalLocatorDetail(attempt.action) ? attempt.action : GENERIC_PROPOSAL;
+  const plan = showDiagnostic || !isInternalLocatorDetail(attempt.action) ? attempt.action : GENERIC_PLAN;
 
   return {
     header,
     observed: attempt.failureSummary,
-    proposal,
+    plan,
     attemptLabel: `Attempt ${attempt.attempt} of ${attempt.maxAttempts}`,
     diagnosticDetail: showDiagnostic
       ? `Strategy: ${attempt.action}  ·  Checkpoint locator: ${attempt.checkpoint}`

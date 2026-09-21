@@ -12,26 +12,27 @@ type StageTrackerProps = {
 };
 
 /**
- * The FLOW stage tracker: Discover -> Plan -> Approve -> Execute -> Verify
- * -> Report, with a marker under whichever stage is active. The active
- * stage's dots pulse via useActiveStagePulse when animation is enabled.
+ * The FLOW stage checklist: Discover, Plan, Approve, Execute, Verify,
+ * Report, each with a leading glyph — done (✓, green), active (●, cyan,
+ * pulsing via useActiveStagePulse when animation is enabled), or
+ * pending (○, muted).
  */
 export function StageTracker({ currentStage, animationEnabled }: StageTrackerProps): React.ReactElement {
   const pulse = useActiveStagePulse(currentStage, animationEnabled);
+  const currentIndex = currentStage ? FLOW_STAGES.findIndex((stage) => stage.id === currentStage) : -1;
 
   return (
     <Box flexDirection="column">
       <Box gap={2}>
         {FLOW_STAGES.map((stage, index) => {
           const isCurrent = stage.id === currentStage;
-          const isPast =
-            currentStage !== undefined && index < FLOW_STAGES.findIndex((s) => s.id === currentStage);
+          const isPast = currentIndex !== -1 && index < currentIndex;
           const color = isCurrent ? palette.cyan : isPast ? palette.green : palette.muted;
+          const glyph = isPast ? "✓" : isCurrent ? "●" : "○";
           return (
             <Text key={stage.id} color={color} bold={isCurrent}>
-              {stage.label}
+              {glyph} {stage.label}
               {isCurrent ? pulse : ""}
-              {index < FLOW_STAGES.length - 1 ? "  ->" : ""}
             </Text>
           );
         })}

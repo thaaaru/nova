@@ -6,13 +6,14 @@ import { dirname, resolve } from "node:path";
 import { Command, Option } from "commander";
 
 import { buildRuntime } from "./context.js";
-import type { RuntimeHooks } from "./context.js";
-import { loadConfig } from "../config/index.js";
+import type { NovaRuntime, RuntimeHooks } from "./context.js";
+import { loadConfig, type NovaConfig } from "../config/index.js";
 import { runApprove, runDiscover, runExecution, runPlan, runReport } from "./commands.js";
 import { serveMcp } from "../mcp/server.js";
 import { runTui } from "../tui/index.js";
 import { captureStorageState } from "../services/browser/login.js";
 import type { UserJourney, VerificationResult } from "../domain/index.js";
+import { VerbosityLevelSchema } from "../domain/index.js";
 import {
   approveJourney,
   confirmRun,
@@ -47,6 +48,8 @@ import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./int
 import { runDiscoverWizard } from "./interactive/discover-wizard.js";
 import { checkForUpdatesIfDue } from "../services/update-check/index.js";
 import { applyUpdate } from "../services/update-check/apply-update.js";
+import { classifyExitCode } from "./exit-code.js";
+import { loadTuiSettings, saveTuiSettings } from "../tui/theme/settings.js";
 
 /** Commander's recipe for a repeatable option (e.g. `--fixture a --fixture b`). */
 function collect(value: string, previous: string[]): string[] {
@@ -89,6 +92,29 @@ function classificationCounts(results: VerificationResult[]): Record<string, num
     counts[verification.classification] = (counts[verification.classification] ?? 0) + 1;
     return counts;
   }, {});
+}
+
+/**
+ * Every currently open runtime, tracked only so a SIGINT received mid-command
+ * (not mid-prompt, which already exits cleanly through CancelledInputError)
+ * has something to close before the process dies. This is lifecycle
+ * bookkeeping for signal safety, not domain state: every command still
+ * builds and closes its own runtime through its existing try/finally, and
+ * the set is always empty between commands.
+ */
+const activeRuntimes = new Set<NovaRuntime>();
+
+/** Every `buildRuntime` call in this file goes through here so the SIGINT backstop below knows what to close. */
+function trackedRuntime(overrides: Partial<NovaConfig> = {}, hooks: RuntimeHooks = {}): NovaRuntime {
+  const runtime = buildRuntime(overrides, hooks);
+  activeRuntimes.add(runtime);
+  return runtime;
+}
+
+/** Pairs with `trackedRuntime`; replaces the bare `runtime.repository.close()` every command's `finally` block used to call directly. */
+function closeTrackedRuntime(runtime: NovaRuntime): void {
+  activeRuntimes.delete(runtime);
+  runtime.repository.close();
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -144,6 +170,43 @@ program
     }
   });
 
+const configCommand = program.command("config").description("Manage local Nova CLI/TUI preferences.");
+
+configCommand
+  .command("set <key> <value>")
+  .description(
+    "Set a local preference: `animation <on|off>` or `verbosity <executive|standard|diagnostic>` — the same preferences `:animation`/`:verbosity` set inside the TUI.",
+  )
+  .action((key: string, value: string) => {
+    const config = loadConfig();
+    const settings = loadTuiSettings(config);
+    if (key === "animation") {
+      if (value !== "on" && value !== "off") {
+        process.stderr.write(`Invalid value for "animation": "${value}". Expected "on" or "off".\n`);
+        process.exitCode = 1;
+        return;
+      }
+      saveTuiSettings(config, { ...settings, animation: value === "on" });
+      process.stdout.write(`animation set to ${value}.\n`);
+      return;
+    }
+    if (key === "verbosity") {
+      const parsed = VerbosityLevelSchema.safeParse(value);
+      if (!parsed.success) {
+        process.stderr.write(
+          `Invalid value for "verbosity": "${value}". Expected one of executive, standard, diagnostic.\n`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      saveTuiSettings(config, { ...settings, verbosity: parsed.data });
+      process.stdout.write(`verbosity set to ${parsed.data}.\n`);
+      return;
+    }
+    process.stderr.write(`Unknown config key: "${key}". Expected "animation" or "verbosity".\n`);
+    process.exitCode = 1;
+  });
+
 const discoverCommand = withInteractivityOptions(
   program
     .command("discover")
@@ -165,7 +228,7 @@ discoverCommand.action(
     interactive?: boolean;
     nonInteractive?: boolean;
   }) => {
-    const runtime = buildRuntime({}, progressHooks());
+    const runtime = trackedRuntime({}, progressHooks());
     try {
       const result = await runDiscover(runtime, {
         target: options.target,
@@ -218,7 +281,7 @@ discoverCommand.action(
         session.close();
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   },
 );
@@ -259,7 +322,7 @@ program
   .requiredOption("--objective <text>", "What this run should test")
   .option("--run <runId>", "Run id (defaults to the most recently discovered run)")
   .action(async (options: { objective: string; run?: string }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const result = await runPlan(runtime, options);
       process.stdout.write(`Plan ${result.planId} ready for review: ${result.cases.length} case(s).\n`);
@@ -270,7 +333,7 @@ program
       }
       process.stdout.write(`Next: nova approve --plan ${result.planId}\n`);
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -282,7 +345,7 @@ program
   .option("--reject", "Reject instead of approve", false)
   .option("--note <text>", "Optional note recorded with the decision")
   .action(async (options: { plan: string; reviewer?: string; reject: boolean; note?: string }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const result = await runApprove(runtime, options);
       process.stdout.write(`Plan ${result.runId} ${result.decision}.\n`);
@@ -290,7 +353,7 @@ program
         process.stdout.write(`Next: nova run --plan ${result.runId}\n`);
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -300,14 +363,14 @@ program
   .requiredOption("--plan <planId>", "Plan id (same as the run id)")
   .option("--no-headless", "Run the browser headed")
   .action(async (options: { plan: string; headless: boolean }) => {
-    const runtime = buildRuntime({}, progressHooks());
+    const runtime = trackedRuntime({}, progressHooks());
     try {
       const result = await runExecution(runtime, options);
       process.stdout.write(`Run ${result.runId} finished: ${result.status}.\n`);
       process.stdout.write(`${JSON.stringify(result.classificationCounts)}\n`);
       process.stdout.write(`Next: nova report --run ${result.runId}\n`);
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -315,24 +378,39 @@ const reportCommand = withInteractivityOptions(
   program
     .command("report")
     .description("(Re)generate JSON, JUnit, Markdown, and self-contained HTML reports for a run.")
-    .option("--run <runId>", "Run id"),
+    .option("--run <runId>", "Run id")
+    .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false),
 );
-reportCommand.action(async (options: { run?: string; interactive?: boolean; nonInteractive?: boolean }) => {
-  const runtime = buildRuntime();
-  try {
-    const interactivity = detectInteractivity(options as InteractivityOptions);
-    const fields = buildReportFields(runtime);
-    const resolved = await resolveInputs(reportResolveConfig(fields), { run: options.run }, interactivity);
-    const input = ReportInputSchema.parse(resolved);
-    const written = runReport(runtime, { run: input.run });
-    process.stdout.write(`JSON:     ${written.jsonPath}\n`);
-    process.stdout.write(`JUnit:    ${written.junitPath}\n`);
-    process.stdout.write(`Markdown: ${written.markdownPath}\n`);
-    process.stdout.write(`HTML:     ${written.htmlPath}\n`);
-  } finally {
-    runtime.repository.close();
-  }
-});
+reportCommand.action(
+  async (options: { run?: string; json: boolean; interactive?: boolean; nonInteractive?: boolean }) => {
+    const runtime = trackedRuntime();
+    try {
+      const interactivity = detectInteractivity(options as InteractivityOptions);
+      const fields = buildReportFields(runtime);
+      const resolved = await resolveInputs(reportResolveConfig(fields), { run: options.run }, interactivity);
+      const input = ReportInputSchema.parse(resolved);
+      const written = runReport(runtime, { run: input.run });
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            runId: input.run,
+            jsonPath: written.jsonPath,
+            junitPath: written.junitPath,
+            markdownPath: written.markdownPath,
+            htmlPath: written.htmlPath,
+          }),
+        );
+        return;
+      }
+      process.stdout.write(`JSON:     ${written.jsonPath}\n`);
+      process.stdout.write(`JUnit:    ${written.junitPath}\n`);
+      process.stdout.write(`Markdown: ${written.markdownPath}\n`);
+      process.stdout.write(`HTML:     ${written.htmlPath}\n`);
+    } finally {
+      closeTrackedRuntime(runtime);
+    }
+  },
+);
 
 const mapCommand = program.command("map").description("Manage Application Test Maps.");
 
@@ -349,7 +427,8 @@ const mapDiscoverCommand = withInteractivityOptions(
       "--storage-state <path>",
       "Path to a session captured by `nova login` — every journey run against this map reuses it",
     )
-    .option("--no-headless", "Run the browser headed"),
+    .option("--no-headless", "Run the browser headed")
+    .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false),
 );
 mapDiscoverCommand.action(
   async (options: {
@@ -358,10 +437,11 @@ mapDiscoverCommand.action(
     env?: string;
     storageState?: string;
     headless: boolean;
+    json: boolean;
     interactive?: boolean;
     nonInteractive?: boolean;
   }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const interactivity = detectInteractivity(options as InteractivityOptions);
       const resolved = await resolveInputs(
@@ -379,13 +459,26 @@ mapDiscoverCommand.action(
         onProgress: progressHooks().onProgress,
       });
       const journeyCount = result.map.areas.reduce((total, area) => total + area.journeys.length, 0);
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            mapId: result.map.id,
+            applicationName: result.map.applicationName,
+            environment: result.map.environment,
+            status: result.map.status,
+            areaCount: result.map.areas.length,
+            journeyCount,
+          }),
+        );
+        return;
+      }
       process.stdout.write(
         `Map ${result.map.id} drafted: ${result.map.areas.length} area(s), ${journeyCount} draft journey(s).\n`,
       );
       process.stdout.write("This map is a draft until a QA engineer reviews and approves its journeys.\n");
       process.stdout.write(`Next: nova map show ${result.map.id}\n`);
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   },
 );
@@ -394,7 +487,7 @@ mapCommand
   .command("list")
   .description("List every Application Test Map.")
   .action(() => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const maps = listMaps(runtime);
       if (maps.length === 0) {
@@ -406,7 +499,7 @@ mapCommand
         );
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -414,7 +507,7 @@ mapCommand
   .command("show <mapId>")
   .description("Show one map's full area/journey tree.")
   .action((mapId: string) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const map = getMap(runtime, mapId);
       if (!map) {
@@ -451,7 +544,7 @@ mapCommand
         }
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -463,7 +556,7 @@ program
   .option("--reviewer <name>", "Reviewer identity recorded for guided_test/controlled_test confirmations")
   .option("--non-interactive", "Run every step immediately with no confirmation prompts")
   .action(async (mapId: string, options: { reviewer?: string; nonInteractive?: boolean }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     const io = defaultPromptIO;
     const auto = Boolean(options.nonInteractive) || !isInteractiveTTY(io);
     const session = auto ? undefined : createPromptSession(io);
@@ -531,7 +624,7 @@ program
       );
     } finally {
       session?.close();
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -542,7 +635,7 @@ areaCommand
   .description("List a map's application areas.")
   .requiredOption("--map <mapId>", "Application Test Map id")
   .action((options: { map: string }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const areas = listAreas(runtime, options.map);
       for (const area of areas) {
@@ -551,7 +644,7 @@ areaCommand
         );
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -565,7 +658,7 @@ journeyCommand
   .requiredOption("--map <mapId>", "Application Test Map id")
   .option("--area <areaId>", "Filter to one area")
   .action((options: { map: string; area?: string }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const journeys = listJourneys(runtime, options.map, options.area);
       for (const journey of journeys) {
@@ -575,7 +668,7 @@ journeyCommand
         );
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -583,14 +676,15 @@ const journeyApproveCommand = withInteractivityOptions(
   journeyCommand
     .command("approve [journeyId]")
     .description("Approve a journey so it becomes runnable.")
-    .option("--map <mapId>", "Application Test Map id"),
+    .option("--map <mapId>", "Application Test Map id")
+    .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false),
 );
 journeyApproveCommand.action(
   async (
     journeyId: string | undefined,
-    options: { map?: string; interactive?: boolean; nonInteractive?: boolean },
+    options: { map?: string; json: boolean; interactive?: boolean; nonInteractive?: boolean },
   ) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const interactivity = detectInteractivity(options as InteractivityOptions);
       const fields = buildJourneyApproveFields(runtime);
@@ -601,12 +695,16 @@ journeyApproveCommand.action(
       );
       const input = JourneyApproveInputSchema.parse(resolved);
       const journey = approveJourney(runtime, input.map, input.journeyId);
+      if (options.json) {
+        console.log(JSON.stringify({ journeyId: journey.id, map: input.map, status: journey.status }));
+        return;
+      }
       process.stdout.write(`Journey ${journey.id} is now "${journey.status}".\n`);
       if (journey.status === "approved") {
         process.stdout.write(`Next: nova journey run ${journey.id} --map ${input.map} --non-interactive\n`);
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   },
 );
@@ -635,7 +733,8 @@ const journeyRunCommand = withInteractivityOptions(
       "Fixture id required by the journey (repeatable)",
       collect,
       [] as string[],
-    ),
+    )
+    .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false),
 );
 journeyRunCommand.action(
   async (
@@ -645,11 +744,12 @@ journeyRunCommand.action(
       env?: string;
       persona?: string;
       fixture: string[];
+      json: boolean;
       interactive?: boolean;
       nonInteractive?: boolean;
     },
   ) => {
-    const runtime = buildRuntime({}, progressHooks());
+    const runtime = trackedRuntime({}, progressHooks());
     try {
       const interactivity = detectInteractivity(options as InteractivityOptions);
       const fields = buildJourneyRunFields(runtime);
@@ -677,6 +777,21 @@ journeyRunCommand.action(
         personaId,
         fixtureIds,
       });
+      if (options.json) {
+        const finished =
+          prepared.status === "awaiting_approval" ? undefined : runtime.repository.get(prepared.runId);
+        console.log(
+          JSON.stringify({
+            runId: prepared.runId,
+            status: prepared.status,
+            mode: prepared.mode,
+            ...(prepared.status === "awaiting_approval"
+              ? { caseCount: prepared.cases.length }
+              : { classificationCounts: classificationCounts(finished?.verificationResults ?? []) }),
+          }),
+        );
+        return;
+      }
       if (prepared.status === "awaiting_approval") {
         process.stdout.write(
           `Run ${prepared.runId} staged for review (${prepared.mode}): ${prepared.cases.length} case(s).\n`,
@@ -696,7 +811,7 @@ journeyRunCommand.action(
         process.stdout.write(`Next: nova report --run ${prepared.runId} --non-interactive\n`);
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   },
 );
@@ -708,7 +823,7 @@ journeyCommand
   )
   .option("--reviewer <name>", "Reviewer identity recorded in the audit log")
   .action(async (runId: string, options: { reviewer?: string }) => {
-    const runtime = buildRuntime({}, progressHooks());
+    const runtime = trackedRuntime({}, progressHooks());
     try {
       const reviewer = options.reviewer ?? process.env.NOVA_REVIEWER ?? "cli-operator";
       const result = await confirmRun(runtime, runId, reviewer);
@@ -716,7 +831,7 @@ journeyCommand
       process.stdout.write(`${JSON.stringify(result.classificationCounts)}\n`);
       process.stdout.write(`Next: nova report --run ${result.runId} --non-interactive\n`);
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -726,7 +841,7 @@ journeyCommand
     "Match free text against a map's journeys, or propose a draft journey when nothing matches well.",
   )
   .action((mapId: string, requestText: string) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const match = describeTest(runtime, mapId, requestText);
       if (match.kind === "matched") {
@@ -740,7 +855,7 @@ journeyCommand
         );
       }
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -749,7 +864,7 @@ program
   .description("List deterministic regression-run recommendations for a map.")
   .requiredOption("--map <mapId>", "Application Test Map id")
   .action(async (options: { map: string }) => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       const results = await recommendations(runtime, options.map);
       if (results.length === 0) {
@@ -763,7 +878,7 @@ program
         );
       });
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -779,11 +894,11 @@ program
   .command("tui")
   .description("Launch Nova's interactive terminal UI.")
   .action(async () => {
-    const runtime = buildRuntime();
+    const runtime = trackedRuntime();
     try {
       await runTui(runtime);
     } finally {
-      runtime.repository.close();
+      closeTrackedRuntime(runtime);
     }
   });
 
@@ -804,16 +919,40 @@ async function main(): Promise<void> {
   await program.parseAsync();
 }
 
+/**
+ * Backstop for a SIGINT received mid-command (e.g. while a browser crawl or
+ * test execution is running) — the prompt-level Ctrl+C path already exits
+ * cleanly through CancelledInputError without ever reaching here. Node
+ * suppresses its own default "exit 130" behavior once a SIGINT listener is
+ * registered, so this handler closes whatever runtime the interrupted
+ * command left open and exits with the same code by hand.
+ */
+process.once("SIGINT", () => {
+  for (const runtime of activeRuntimes) {
+    try {
+      runtime.repository.close();
+    } catch {
+      // Best-effort: the process is exiting regardless.
+    }
+    try {
+      runtime.testMaps.close();
+    } catch {
+      // Best-effort: the process is exiting regardless.
+    }
+  }
+  activeRuntimes.clear();
+  process.exit(130);
+});
+
 main().catch((error: unknown) => {
+  process.exitCode = classifyExitCode(error);
   if (error instanceof CancelledInputError) {
     process.stdout.write("Cancelled.\n");
     return;
   }
   if (error instanceof NonInteractiveInputError) {
     process.stderr.write(`${error.message}\n`);
-    process.exitCode = 1;
     return;
   }
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
 });

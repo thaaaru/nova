@@ -203,7 +203,8 @@ export function App({ runtime }: AppProps): React.ReactElement {
       switch (intent.type) {
         case "help": {
           setCommandOutput([
-            "Commands: :help :status :runs :discover :plan :approve :run :pause :resume :stop :report :artifacts :verbosity :animation :json :clear",
+            "Commands: :help :status :runs :discover :run <journey> :approve <plan> :report <run> :artifacts <run> :verbosity :animation :clear",
+            "Also: :plan :pause :resume :stop :json",
           ]);
           break;
         }
@@ -333,6 +334,7 @@ export function App({ runtime }: AppProps): React.ReactElement {
           currentRunViewModel={viewModel.runId ? viewModel : undefined}
           onSelect={handleMapHomeSelect}
           onQuit={exit}
+          onCycleVerbosity={cycleVerbosity}
           inputActive={!commandOpen}
         />
       ) : null}

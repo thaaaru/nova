@@ -16,9 +16,9 @@ type RecoveryCardProps = {
  * The recovery card, rendered only from real ExecutionResult.recoveryAttempts
  * fields once the real runExecution call has resolved — never fabricated
  * from the simulated progress readout. Copy is QA language (Observed / Nova
- * proposes / Recovery: Attempt N of M), built by services/recovery-copy.ts,
- * which is also the single place internal locator/strategy detail is
- * withheld below "diagnostic" verbosity.
+ * will / Attempt N of M), built by services/recovery-copy.ts, which is
+ * also the single place internal locator/strategy detail is withheld
+ * below "diagnostic" verbosity.
  */
 export function RecoveryCard({
   caseId,
@@ -29,7 +29,7 @@ export function RecoveryCard({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={palette.violet} paddingX={1}>
       <Text bold color={palette.violet}>
-        RECOVERY — {caseId}
+        RECOVERY IN PROGRESS — {caseId}
       </Text>
       <Text bold>{copy.header}</Text>
       <Text bold color={palette.muted}>
@@ -37,12 +37,9 @@ export function RecoveryCard({
       </Text>
       <Text>{copy.observed}</Text>
       <Text bold color={palette.muted}>
-        Nova proposes:
+        Nova will:
       </Text>
-      <Text>{copy.proposal}</Text>
-      <Text bold color={palette.muted}>
-        Recovery:
-      </Text>
+      <Text>{copy.plan}</Text>
       <Text>{copy.attemptLabel}</Text>
       {copy.diagnosticDetail ? <Text color={palette.muted}>{copy.diagnosticDetail}</Text> : null}
       <Text color={attempt.outcome === "recovered" ? palette.green : palette.amber}>

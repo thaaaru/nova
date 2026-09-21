@@ -7,9 +7,9 @@ import type {
 import { POLICY_MODE_LABEL } from "./view-model.js";
 
 /**
- * The seven numbered options on the Application Test Map home menu — the
- * TUI's single entry point into the map-driven product flow. IDs are the
- * screen-routing keys App.tsx switches on; numbers/labels are exactly the
+ * The Application Test Map home menu's numbered options — the TUI's
+ * single entry point into the map-driven product flow. IDs are the
+ * screen-routing keys App.tsx switches on; labels are exactly the
  * product spec's wording so operators can drive the menu by digit key.
  */
 export type MapHomeMenuOptionId =
@@ -22,16 +22,31 @@ export type MapHomeMenuOptionId =
   | "reports"
   | "command-mode";
 
-export const MAP_HOME_MENU_ITEMS: Array<{ id: MapHomeMenuOptionId; number: number; label: string }> = [
-  { id: "discover-app", number: 1, label: "Discover an application" },
-  { id: "test-area", number: 2, label: "Test an application area" },
-  { id: "describe-test", number: 3, label: "Describe a test" },
-  { id: "recommendations", number: 4, label: "Run recommended regression tests" },
-  { id: "explore-map", number: 5, label: "Explore and update application map" },
-  { id: "failures", number: 6, label: "Review failures and recoveries" },
-  { id: "reports", number: 7, label: "Open recent reports" },
-  { id: "command-mode", number: 8, label: "Advanced command mode" },
+const GUIDED_MENU_ITEMS: Array<{ id: MapHomeMenuOptionId; label: string }> = [
+  { id: "test-area", label: "Test an application area" },
+  { id: "describe-test", label: "Describe a test" },
+  { id: "recommendations", label: "Run recommended regression tests" },
+  { id: "explore-map", label: "Explore or update application map" },
+  { id: "failures", label: "Review failures and recoveries" },
+  { id: "reports", label: "Open recent reports" },
+  { id: "command-mode", label: "Advanced command mode" },
 ];
+
+/**
+ * Builds the home menu's numbered options for the current map state, per
+ * the product spec's seven-item guided menu. "Discover an application"
+ * is only offered as an empty-state affordance (`hasMap` false) — once a
+ * map exists it drops off the numbered list in favor of the seven
+ * guided options below it.
+ */
+export function buildMapHomeMenuItems(
+  hasMap: boolean,
+): Array<{ id: MapHomeMenuOptionId; number: number; label: string }> {
+  const items = hasMap
+    ? GUIDED_MENU_ITEMS
+    : [{ id: "discover-app" as const, label: "Discover an application" }, ...GUIDED_MENU_ITEMS];
+  return items.map((item, index) => ({ ...item, number: index + 1 }));
+}
 
 /**
  * Picks the "active" map for the home menu: the most recently updated one.

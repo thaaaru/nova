@@ -25,10 +25,10 @@ describe("RecoveryCard", () => {
   it("renders the exact QA-language sections at standard verbosity", () => {
     const { lastFrame } = render(<RecoveryCard caseId="case-1" attempt={attempt} verbosity="standard" />);
     const frame = lastFrame() ?? "";
+    expect(frame).toContain("RECOVERY IN PROGRESS");
     expect(frame).toContain("Observed:");
     expect(frame).toContain("The expected payment control is no longer available.");
-    expect(frame).toContain("Nova proposes:");
-    expect(frame).toContain("Recovery:");
+    expect(frame).toContain("Nova will:");
     expect(frame).toContain("Attempt 1 of 2");
   });
 
