@@ -58,6 +58,22 @@ case "${SHELL:-}" in
   *) rc_file="$HOME/.profile" ;;
 esac
 
+# Detect an existing installation/config so re-running install.sh (or running
+# it again after a fresh clone) never re-prompts for things Nova already
+# knows — it just repoints the alias at this checkout and reuses saved keys.
+existing_alias_path=""
+if [ -f "$rc_file" ]; then
+  existing_alias_path="$(grep -E '^alias nova="node ' "$rc_file" 2>/dev/null | sed -E 's/^alias nova="node (.*)"$/\1/' | tail -n1)"
+fi
+existing_deepseek_key="${DEEPSEEK_API_KEY:-}"
+if [ -z "$existing_deepseek_key" ] && [ -f "$rc_file" ]; then
+  existing_deepseek_key="$(grep -E '^export DEEPSEEK_API_KEY="' "$rc_file" 2>/dev/null | sed -E 's/^export DEEPSEEK_API_KEY="(.*)"$/\1/' | tail -n1)"
+fi
+existing_deepseek_model="${NOVA_DEEPSEEK_MODEL:-}"
+if [ -z "$existing_deepseek_model" ] && [ -f "$rc_file" ]; then
+  existing_deepseek_model="$(grep -E '^export NOVA_DEEPSEEK_MODEL="' "$rc_file" 2>/dev/null | sed -E 's/^export NOVA_DEEPSEEK_MODEL="(.*)"$/\1/' | tail -n1)"
+fi
+
 append_once() {
   # append_once <line> <rc_file> — skip if the line (or an alias/export of the
   # same name) is already present, so re-running install.sh is idempotent.
@@ -71,24 +87,39 @@ append_once() {
 
 if [ -t 0 ]; then
   echo ""
-  read -r -p "Add a 'nova' alias to $rc_file? [Y/n] " add_alias
-  if [ "${add_alias:-y}" != "n" ] && [ "${add_alias:-y}" != "N" ]; then
-    append_once "alias nova=\"node $bin_path\"" "$rc_file"
-    echo "Added. Run 'source $rc_file' (or open a new shell) to use 'nova' directly."
+  if [ -n "$existing_alias_path" ]; then
+    if [ "$existing_alias_path" = "$bin_path" ]; then
+      echo "Existing 'nova' alias in $rc_file already points here."
+    else
+      append_once "alias nova=\"node $bin_path\"" "$rc_file"
+      echo "Found an existing 'nova' alias in $rc_file pointing at $existing_alias_path — repointed it at this checkout ($bin_path)."
+    fi
   else
-    echo "Skipped. Run Nova with: node $bin_path <command>"
+    read -r -p "Add a 'nova' alias to $rc_file? [Y/n] " add_alias
+    if [ "${add_alias:-y}" != "n" ] && [ "${add_alias:-y}" != "N" ]; then
+      append_once "alias nova=\"node $bin_path\"" "$rc_file"
+      echo "Added. Run 'source $rc_file' (or open a new shell) to use 'nova' directly."
+    else
+      echo "Skipped. Run Nova with: node $bin_path <command>"
+    fi
   fi
 
   echo ""
-  read -r -p "DeepSeek API key to enable LLM plan proposals (leave blank to skip): " deepseek_key
-  if [ -n "$deepseek_key" ]; then
-    read -r -p "Model to use [deepseek-chat]: " deepseek_model
-    deepseek_model="${deepseek_model:-deepseek-chat}"
-    append_once "export DEEPSEEK_API_KEY=\"$deepseek_key\"" "$rc_file"
-    append_once "export NOVA_DEEPSEEK_MODEL=\"$deepseek_model\"" "$rc_file"
-    echo "Saved to $rc_file. Without a key, 'nova plan' falls back to the deterministic template planner."
+  if [ -n "$existing_deepseek_key" ]; then
+    echo "Reusing existing DeepSeek API key (found in $([ -n "${DEEPSEEK_API_KEY:-}" ] && echo "the current shell environment" || echo "$rc_file"))."
+    append_once "export DEEPSEEK_API_KEY=\"$existing_deepseek_key\"" "$rc_file"
+    append_once "export NOVA_DEEPSEEK_MODEL=\"${existing_deepseek_model:-deepseek-chat}\"" "$rc_file"
   else
-    echo "Skipped. 'nova plan' will use the deterministic template planner only."
+    read -r -p "DeepSeek API key to enable LLM plan proposals (leave blank to skip): " deepseek_key
+    if [ -n "$deepseek_key" ]; then
+      read -r -p "Model to use [deepseek-chat]: " deepseek_model
+      deepseek_model="${deepseek_model:-deepseek-chat}"
+      append_once "export DEEPSEEK_API_KEY=\"$deepseek_key\"" "$rc_file"
+      append_once "export NOVA_DEEPSEEK_MODEL=\"$deepseek_model\"" "$rc_file"
+      echo "Saved to $rc_file. Without a key, 'nova plan' falls back to the deterministic template planner."
+    else
+      echo "Skipped. 'nova plan' will use the deterministic template planner only."
+    fi
   fi
 
   echo ""
@@ -106,14 +137,28 @@ if [ -t 0 ]; then
   fi
 else
   echo ""
-  echo "Non-interactive shell detected — skipping alias/env prompts."
+  if [ -n "$existing_alias_path" ] && [ "$existing_alias_path" != "$bin_path" ]; then
+    append_once "alias nova=\"node $bin_path\"" "$rc_file"
+    echo "Non-interactive shell detected — repointed the existing 'nova' alias in $rc_file at this checkout ($bin_path)."
+  else
+    echo "Non-interactive shell detected — skipping alias/env prompts."
+  fi
+  if [ -n "$existing_deepseek_key" ]; then
+    append_once "export DEEPSEEK_API_KEY=\"$existing_deepseek_key\"" "$rc_file"
+    append_once "export NOVA_DEEPSEEK_MODEL=\"${existing_deepseek_model:-deepseek-chat}\"" "$rc_file"
+    echo "Reused the existing DeepSeek API key."
+  fi
   echo "Run it with:"
   echo "  node $bin_path <command>"
   echo ""
-  echo "Or add manually to your shell profile:"
-  echo "  alias nova=\"node $bin_path\""
-  echo "  export DEEPSEEK_API_KEY=sk-...          # enables LLM plan proposals"
-  echo "  export NOVA_DEEPSEEK_MODEL=deepseek-chat # optional, this is the default"
+  if [ -z "$existing_alias_path" ]; then
+    echo "Or add manually to your shell profile:"
+    echo "  alias nova=\"node $bin_path\""
+  fi
+  if [ -z "$existing_deepseek_key" ]; then
+    echo "  export DEEPSEEK_API_KEY=sk-...          # enables LLM plan proposals"
+    echo "  export NOVA_DEEPSEEK_MODEL=deepseek-chat # optional, this is the default"
+  fi
 fi
 
 echo ""
