@@ -9,7 +9,7 @@ import { TestCaseSchema } from "../../domain/index.js";
  * the deterministic template planner builds, minus `id` (assigned by code
  * after validation, never trusted from the model) and minus `allowedDomains`
  * (the model is never given the choice — code stamps the manifest's own
- * allowedDomains onto every case it proposes, see generateCasesWithLlm).
+ * allowedDomains onto every case it proposes, see createDeepSeekPlanGenerator).
  *
  * This is the whole guardrail: the model can only ever propose steps,
  * assertions, and risk metadata shaped like a TestCase. It cannot invent a
@@ -30,20 +30,27 @@ export type GenerateCasesInput = {
 
 export type PlanGenerator = (input: GenerateCasesInput) => Promise<TestCase[]>;
 
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+
 /**
- * The orchestrator's one LLM integration point. Everything upstream and
- * downstream of this call is deterministic code (see plan-templates.ts,
- * scope-policy.ts): the model only ever *proposes* a plan shaped like the
- * domain schema; createPlanNode re-validates every case against
- * checkCaseScope before anything is stored or shown for approval, exactly
- * like a human-authored plan would be. The model is never told it can
- * change allowedDomains — that's stamped by code after the call returns.
+ * The orchestrator's one LLM integration point, backed by DeepSeek's
+ * OpenAI-compatible chat completions API (same request/response shape as
+ * OpenAI, just a different base URL and model — @langchain/openai's
+ * ChatOpenAI talks to it directly via `configuration.baseURL`, no separate
+ * SDK needed). Everything upstream and downstream of this call is
+ * deterministic code (see plan-templates.ts, scope-policy.ts): the model
+ * only ever *proposes* a plan shaped like the domain schema; createPlanNode
+ * re-validates every case against checkCaseScope before anything is stored
+ * or shown for approval, exactly like a human-authored plan would be. The
+ * model is never told it can change allowedDomains — that's stamped by code
+ * after the call returns.
  */
-export function createOpenAiPlanGenerator(options: { apiKey: string; model?: string }): PlanGenerator {
+export function createDeepSeekPlanGenerator(options: { apiKey: string; model?: string }): PlanGenerator {
   const chat = new ChatOpenAI({
     apiKey: options.apiKey,
-    model: options.model ?? "gpt-4o-mini",
+    model: options.model ?? "deepseek-chat",
     temperature: 0,
+    configuration: { baseURL: DEEPSEEK_BASE_URL },
   });
   const structured = chat.withStructuredOutput(ProposedPlanSchema, { name: "propose_test_plan" });
 

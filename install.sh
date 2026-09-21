@@ -80,12 +80,12 @@ if [ -t 0 ]; then
   fi
 
   echo ""
-  read -r -p "OpenAI API key to enable LLM plan proposals (leave blank to skip): " openai_key
-  if [ -n "$openai_key" ]; then
-    read -r -p "Model to use [gpt-4o-mini]: " openai_model
-    openai_model="${openai_model:-gpt-4o-mini}"
-    append_once "export OPENAI_API_KEY=\"$openai_key\"" "$rc_file"
-    append_once "export NOVA_OPENAI_MODEL=\"$openai_model\"" "$rc_file"
+  read -r -p "DeepSeek API key to enable LLM plan proposals (leave blank to skip): " deepseek_key
+  if [ -n "$deepseek_key" ]; then
+    read -r -p "Model to use [deepseek-chat]: " deepseek_model
+    deepseek_model="${deepseek_model:-deepseek-chat}"
+    append_once "export DEEPSEEK_API_KEY=\"$deepseek_key\"" "$rc_file"
+    append_once "export NOVA_DEEPSEEK_MODEL=\"$deepseek_model\"" "$rc_file"
     echo "Saved to $rc_file. Without a key, 'nova plan' falls back to the deterministic template planner."
   else
     echo "Skipped. 'nova plan' will use the deterministic template planner only."
@@ -112,8 +112,8 @@ else
   echo ""
   echo "Or add manually to your shell profile:"
   echo "  alias nova=\"node $bin_path\""
-  echo "  export OPENAI_API_KEY=sk-...        # enables LLM plan proposals"
-  echo "  export NOVA_OPENAI_MODEL=gpt-4o-mini # optional, this is the default"
+  echo "  export DEEPSEEK_API_KEY=sk-...          # enables LLM plan proposals"
+  echo "  export NOVA_DEEPSEEK_MODEL=deepseek-chat # optional, this is the default"
 fi
 
 echo ""

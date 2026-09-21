@@ -5,15 +5,15 @@ export type NovaConfig = {
   artifactsDirectory: string;
   headless: boolean;
   /**
-   * Set only when OPENAI_API_KEY is present in the environment. The plan
-   * node's LLM path (services/llm/openai-plan-generator.ts) is skipped
+   * Set only when DEEPSEEK_API_KEY is present in the environment. The plan
+   * node's LLM path (services/llm/deepseek-plan-generator.ts) is skipped
    * entirely when this is undefined — Nova falls back to the deterministic
    * template planner, so no command hard-fails for an operator without a
    * key. Never logged, never written to disk, never passed to anything
-   * outside the OpenAI client itself.
+   * outside the DeepSeek client itself.
    */
-  openaiApiKey?: string;
-  openaiModel?: string;
+  deepseekApiKey?: string;
+  deepseekModel?: string;
 };
 
 /** Central place every entrypoint (CLI, MCP server) reads config from — no scattered process.env reads elsewhere. */
@@ -23,7 +23,7 @@ export function loadConfig(overrides: Partial<NovaConfig> = {}): NovaConfig {
     artifactsDirectory:
       overrides.artifactsDirectory ?? resolve(process.env.NOVA_ARTIFACTS_DIR ?? "artifacts"),
     headless: overrides.headless ?? process.env.NOVA_HEADLESS !== "false",
-    openaiApiKey: overrides.openaiApiKey ?? process.env.OPENAI_API_KEY ?? undefined,
-    openaiModel: overrides.openaiModel ?? process.env.NOVA_OPENAI_MODEL ?? "gpt-4o-mini",
+    deepseekApiKey: overrides.deepseekApiKey ?? process.env.DEEPSEEK_API_KEY ?? undefined,
+    deepseekModel: overrides.deepseekModel ?? process.env.NOVA_DEEPSEEK_MODEL ?? "deepseek-chat",
   };
 }

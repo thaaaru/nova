@@ -1,11 +1,11 @@
 import type { GraphState } from "../state.js";
-import type { PlanGenerator } from "../../services/llm/openai-plan-generator.js";
+import type { PlanGenerator } from "../../services/llm/deepseek-plan-generator.js";
 import { checkCaseScope } from "../../services/policy/scope-policy.js";
 import { generatePlanFromDiscovery } from "../plan-templates.js";
 
 export type PlanDependencies = {
   /**
-   * Optional — omitted whenever no OPENAI_API_KEY is configured (see
+   * Optional — omitted whenever no DEEPSEEK_API_KEY is configured (see
    * config/index.ts and cli/context.ts). When present, the LLM proposes
    * cases; when absent, the node falls straight to the deterministic
    * template path, exactly as it always has.

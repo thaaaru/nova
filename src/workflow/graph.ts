@@ -13,7 +13,7 @@ import { GraphStateAnnotation } from "./state.js";
 
 export type NovaGraphDependencies = {
   discover: DiscoverDependencies;
-  /** Omit entirely (or omit generateCases) to keep the plan node fully deterministic — no OpenAI call at all. */
+  /** Omit entirely (or omit generateCases) to keep the plan node fully deterministic — no DeepSeek call at all. */
   plan?: PlanDependencies;
   execute: ExecuteDependencies;
   report: ReportDependencies;
