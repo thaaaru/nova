@@ -76,4 +76,20 @@ describe("PreRunSummaryScreen bottom action label", () => {
     );
     expect(lastFrame() ?? "").toContain("Submit for approval");
   });
+
+  it("never offers 'Run now' for a controlled_test journey pre-approval — quick_test's action label is never available on a higher-risk journey", () => {
+    const { lastFrame } = render(
+      <PreRunSummaryScreen
+        runtime={fakeRuntime}
+        map={sampleApplicationTestMap}
+        journey={findJourney("registered_customer_checkout")}
+        context={context}
+        verbosity="standard"
+        onQuickRunComplete={noop}
+        onReadyToConfirm={noop}
+        onBack={noop}
+      />,
+    );
+    expect(lastFrame() ?? "").not.toContain("Run now");
+  });
 });
