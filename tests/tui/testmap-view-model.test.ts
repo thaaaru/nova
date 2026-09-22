@@ -15,28 +15,31 @@ import {
 } from "../../src/tui/services/testmap-view-model.js";
 
 describe("buildMapHomeMenuItems", () => {
-  it("offers the seven guided options from the product spec once a map exists", () => {
+  it("leads with the guided end-to-end flow, then the map-driven options, once a map exists", () => {
     expect(buildMapHomeMenuItems(true).map((item) => `${item.number}. ${item.label}`)).toEqual([
-      "1. Test an application area",
-      "2. Describe a test",
-      "3. Run recommended regression tests",
-      "4. Explore or update application map",
-      "5. Review failures and recoveries",
-      "6. Open recent reports",
-      "7. Advanced command mode",
-    ]);
-  });
-
-  it("prepends 'Discover an application' as an empty-state affordance when there is no map yet", () => {
-    expect(buildMapHomeMenuItems(false).map((item) => `${item.number}. ${item.label}`)).toEqual([
-      "1. Discover an application",
+      "1. Test an application end to end",
       "2. Test an application area",
       "3. Describe a test",
       "4. Run recommended regression tests",
       "5. Explore or update application map",
       "6. Review failures and recoveries",
       "7. Open recent reports",
-      "8. Advanced command mode",
+      "8. Manage projects & applications",
+      "9. Advanced command mode",
+    ]);
+  });
+
+  it("still leads with the guided flow when there is no map yet, since it needs none", () => {
+    expect(buildMapHomeMenuItems(false).map((item) => `${item.number}. ${item.label}`)).toEqual([
+      "1. Test an application end to end",
+      "2. Choose or create a project",
+      "3. Test an application area",
+      "4. Describe a test",
+      "5. Run recommended regression tests",
+      "6. Explore or update application map",
+      "7. Review failures and recoveries",
+      "8. Open recent reports",
+      "9. Advanced command mode",
     ]);
   });
 });

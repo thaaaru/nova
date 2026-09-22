@@ -11,6 +11,7 @@ type ExploreMapScreenProps = {
   runtime: NovaRuntime;
   map: ApplicationTestMap;
   onMapChanged: () => void;
+  onSelectJourney: (areaId: string, journeyId: string) => void;
   onBack: () => void;
 };
 
@@ -25,13 +26,16 @@ const STATUS_COLOR: Record<string, string> = {
 /**
  * "Explore and update application map" — a read-only tree view of
  * areas -> journeys, plus an in-place approve action for a draft journey
- * (calls `mapService.approveJourney` only). This is the map-curation
- * surface for this MVP; it does not need a full editor.
+ * (calls `mapService.approveJourney` only) and Enter to run an approved
+ * one — the same `map-context` -> `map-prerun-summary` pipeline
+ * "Test an application area"/recommendations use, so approving here
+ * never strands the operator back at Home to find the journey again.
  */
 export function ExploreMapScreen({
   runtime,
   map,
   onMapChanged,
+  onSelectJourney,
   onBack,
 }: ExploreMapScreenProps): React.ReactElement {
   const rows: Row[] = map.areas.flatMap((area) => [
@@ -62,6 +66,16 @@ export function ExploreMapScreen({
         }
       }
     }
+    if (key.return) {
+      const row = rows[selectedIndex];
+      if (row?.kind === "journey") {
+        const area = map.areas.find((candidate) => candidate.id === row.areaId);
+        const journey = area?.journeys.find((candidate) => candidate.id === row.journeyId);
+        if (journey?.status === "approved") {
+          onSelectJourney(row.areaId, row.journeyId);
+        }
+      }
+    }
   });
 
   return (
@@ -77,7 +91,9 @@ export function ExploreMapScreen({
           </Box>
         ))}
       </Box>
-      <Text color={palette.muted}>[up/down] Navigate [A] Approve draft journey [Esc] Back</Text>
+      <Text color={palette.muted}>
+        [up/down] Navigate [A] Approve draft journey [Enter] Run approved journey [Esc] Back
+      </Text>
     </Box>
   );
 }

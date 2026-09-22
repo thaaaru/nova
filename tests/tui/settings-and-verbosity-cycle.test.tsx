@@ -107,3 +107,29 @@ describe("MapHomeScreen verbosity cycling", () => {
     unmount();
   });
 });
+
+describe("MapHomeScreen key hints", () => {
+  /**
+   * The footer used to hard-code "[1-8]". Adding a ninth menu option left
+   * it advertising a range that no longer covered the last item, so this
+   * pins the hint to the menu it describes rather than to a literal.
+   */
+  it("advertises a digit range that matches the number of options actually rendered", () => {
+    const summary = buildMapHomeSummary(undefined);
+    const { lastFrame } = render(
+      <MapHomeScreen
+        summary={summary}
+        onSelect={() => undefined}
+        onQuit={() => undefined}
+        onCycleVerbosity={() => undefined}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    // The frame is drawn with box characters, so count the menu by its
+    // "<n>. <label>" numbering and take the highest number rendered.
+    const numbers = [...frame.matchAll(/(\d+)\.\s+[A-Z]/g)].map((match) => Number(match[1]));
+    const optionCount = Math.max(...numbers);
+    expect(numbers.length).toBeGreaterThan(0);
+    expect(frame).toContain(`[1-${optionCount}]`);
+  });
+});

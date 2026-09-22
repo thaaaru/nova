@@ -11,6 +11,8 @@ import type { NovaConfig } from "../src/config/index.js";
 import type { NovaRuntime } from "../src/cli/context.js";
 import { SqliteRunRepository } from "../src/services/persistence/run-repository.js";
 import { SqliteApplicationTestMapRepository } from "../src/services/persistence/test-map-repository.js";
+import { SqliteProjectRepository } from "../src/services/persistence/project-repository.js";
+import { SqlitePersonaRepository } from "../src/services/persistence/persona-repository.js";
 import { buildNovaGraph } from "../src/workflow/graph.js";
 import { executeTestCase } from "../src/services/browser/execute.js";
 import { startJourneyRun } from "../src/services/testmap/journey-run-service.js";
@@ -282,6 +284,9 @@ describe("persistent selector healing — real end-to-end run against a live dem
     domain = new URL(baseUrl).hostname;
     const repository = new SqliteRunRepository(join(tempDir, `runs-${randomUUID()}.sqlite`));
     const testMaps = new SqliteApplicationTestMapRepository(join(tempDir, `maps-${randomUUID()}.sqlite`));
+    const projects = new SqliteProjectRepository(join(tempDir, `projects-${randomUUID()}.sqlite`));
+    const personas = new SqlitePersonaRepository(join(tempDir, `personas-${randomUUID()}.sqlite`));
+    const sessionVaultDir = join(tempDir, "session-vault");
     const graph = buildNovaGraph({
       discover: {
         discover: async ({ runId }) => ({
@@ -303,12 +308,13 @@ describe("persistent selector healing — real end-to-end run against a live dem
       artifactsDirectory: tempDir,
       headless: true,
     };
-    runtime = { config, repository, testMaps, graph };
+    runtime = { config, repository, testMaps, projects, personas, sessionVaultDir, graph };
   });
 
   afterEach(() => {
     runtime.repository.close();
     runtime.testMaps.close();
+    runtime.projects.close();
     rmSync(tempDir, { recursive: true, force: true });
   });
 

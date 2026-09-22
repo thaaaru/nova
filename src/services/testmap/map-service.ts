@@ -49,7 +49,11 @@ export async function discoverMap(
      */
     applicationName?: string;
     environment: ApplicationTestMapEnvironment;
+    /** The Project this map is added inside. Omitted only for maps drafted before Projects existed. */
+    projectId?: string;
     storageStatePath?: string;
+    /** Which project-level test persona this session came from, if any — recorded as a reusable identity label, never a credential. */
+    personaId?: string;
     headless?: boolean;
     onProgress?: (message: string) => void;
   },
@@ -71,6 +75,7 @@ export async function discoverMap(
     headless: options.headless ?? runtime.config.headless,
     onProgress: options.onProgress,
   });
+  options.onProgress?.("Drafting areas and journeys...");
   const applicationName = await resolveApplicationName(
     runtime,
     options.target,
@@ -81,9 +86,13 @@ export async function discoverMap(
     applicationName,
     environment: options.environment,
     allowedDomains,
+    projectId: options.projectId,
   });
   if (options.storageStatePath) {
     map.approvedScope.storageStatePath = options.storageStatePath;
+  }
+  if (options.personaId) {
+    map.approvedScope.personaId = options.personaId;
   }
   runtime.testMaps.save(map);
   return { map };

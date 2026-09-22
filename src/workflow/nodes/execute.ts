@@ -39,7 +39,11 @@ export function createExecuteNode(deps: ExecuteDependencies) {
     const auditEvents = [...run.auditEvents];
 
     for (const testCase of run.testPlan.cases) {
-      const executionAllowed = checkExecutionAllowed(testCase, run.approval?.decision, run.targetManifest);
+      // "changes_requested" is not an approval: it is treated exactly like a
+      // rejection by the one function that decides whether a case may run.
+      const approvalDecision =
+        run.approval?.decision === "approved" ? "approved" : run.approval ? "rejected" : undefined;
+      const executionAllowed = checkExecutionAllowed(testCase, approvalDecision, run.targetManifest);
       const scopeAllowed = checkCaseScope(testCase, run.targetManifest);
 
       if (!executionAllowed.ok || !scopeAllowed.ok) {

@@ -6,6 +6,7 @@ export type DiscoverDependencies = {
     runId: string;
     manifest: GraphState["run"]["targetManifest"];
     headless?: boolean;
+    maxPages?: number;
     onProgress?: (message: string) => void;
   }) => Promise<DiscoverySnapshot>;
   headless?: boolean;

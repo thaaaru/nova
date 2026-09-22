@@ -10,6 +10,8 @@ import type { NovaConfig } from "../src/config/index.js";
 import type { NovaRuntime } from "../src/cli/context.js";
 import { SqliteRunRepository } from "../src/services/persistence/run-repository.js";
 import { SqliteApplicationTestMapRepository } from "../src/services/persistence/test-map-repository.js";
+import { SqliteProjectRepository } from "../src/services/persistence/project-repository.js";
+import { SqlitePersonaRepository } from "../src/services/persistence/persona-repository.js";
 import { buildNovaGraph } from "../src/workflow/graph.js";
 import type { ExecuteDependencies } from "../src/workflow/nodes/execute.js";
 import type { JourneyRunContext } from "../src/services/testmap/map-to-plan.js";
@@ -210,6 +212,9 @@ let tempDir: string;
 function buildTestRuntime(executeTestCase: ExecuteDependencies["executeTestCase"]): NovaRuntime {
   const repository = new SqliteRunRepository(join(tempDir, `runs-${randomUUID()}.sqlite`));
   const testMaps = new SqliteApplicationTestMapRepository(join(tempDir, `maps-${randomUUID()}.sqlite`));
+  const projects = new SqliteProjectRepository(join(tempDir, `projects-${randomUUID()}.sqlite`));
+  const personas = new SqlitePersonaRepository(join(tempDir, `personas-${randomUUID()}.sqlite`));
+  const sessionVaultDir = join(tempDir, "session-vault");
   const graph = buildNovaGraph({
     discover: {
       discover: async ({ runId }) => ({
@@ -230,7 +235,7 @@ function buildTestRuntime(executeTestCase: ExecuteDependencies["executeTestCase"
     artifactsDirectory: tempDir,
     headless: true,
   };
-  return { config, repository, testMaps, graph };
+  return { config, repository, testMaps, projects, personas, sessionVaultDir, graph };
 }
 
 beforeEach(() => {

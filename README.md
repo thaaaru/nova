@@ -6,17 +6,37 @@ Nova is a governed AI orchestration runtime for web application test automation.
 discover → plan → approval gate → execute → verify → report
 ```
 
-This MVP is deterministic end to end: **no LLM call is required or made anywhere in this codebase yet.** Planning uses fixed templates derived from what discover actually found. LangChain/LangGraph's model-adapter surface is wired in architecturally (see [Architecture](#architecture)) for a later phase, but nothing in this release calls a model.
+**No LLM call is required anywhere.** A model is used for exactly two advisory steps — identifying the application under test, and proposing extra test cases — and both degrade cleanly when none is configured: identification is recorded as unknown with zero confidence, and planning falls back to deterministic rule-pack templates derived from what discovery actually found. Execution is deterministic in every configuration. See [Architecture](#architecture) for what the model is and is not allowed to do.
 
 ## Install
 
-Requires Node.js 22+ (pnpm is bootstrapped automatically via corepack if missing).
+One line. Requires Node.js 22+ (pnpm is bootstrapped automatically if missing).
 
 ```bash
 git clone https://github.com/thaaaru/nova.git && cd nova && ./install.sh
 ```
 
-Run commands either via the built CLI (`node dist/cli/index.js ...`) or directly against source with `pnpm nova ...` (uses `tsx`, no build step needed while iterating).
+That installs dependencies and the Playwright Chromium browser, builds Nova, and puts an executable at `~/.local/bin/nova` — a real file, not a shell alias, so it works in scripts and non-interactive shells too. Open a new shell afterwards.
+
+## Run
+
+One word:
+
+```bash
+nova                              # guided workflow; resumes anything in flight
+nova https://app.example.com      # start against a target
+```
+
+Nova then walks you through it: target → authentication → documentation → application identification → discovery → suggested tests → approval in your browser → execution request → preflight → run → results. There is no separate login/discover/approve/run command to remember, though every one of them still exists for CI and scripting (see [Local run](#local-run)).
+
+Try it against the bundled demo app, with no key and no external target:
+
+```bash
+python3 -m http.server 8931 --directory fixtures/demo-app &
+nova http://127.0.0.1:8931
+```
+
+While iterating on the source you can skip the build entirely: `pnpm nova <args>` runs the TypeScript directly via `tsx`.
 
 ## Local run
 
@@ -149,8 +169,18 @@ A fixture with `lockRequired: true` (e.g. a shared coupon code or sandbox paymen
 ## Terminal UI
 
 ```bash
-pnpm nova tui
+nova test https://app.example.com   # start the guided end-to-end workflow
+nova                                # resume what is in flight, or ask for the target
+pnpm nova tui                        # the same UI, from a checkout
 ```
+
+`nova test` walks the whole flow in one session — target, authentication, documentation, identification, discovery, suggested tests, approval, execution request, preflight, run, results — with no separate login/discover/approve/run commands to remember. In a non-TTY or CI context it returns a structured error naming the missing field, the accepted flags, and a corrected command, instead of dead-ending on "required option not specified". Every scriptable command below still works exactly as before.
+
+### Approval happens in your browser, on loopback
+
+When a plan is ready, Nova serves its own review page from `127.0.0.1` on a random free port, behind a single-use token, and opens it while the TUI waits. The page shows the application identity, discovery summary, and every suggested test with its steps, expected result, fixtures, evidence, rationale, confidence, side-effect class and source — filterable, selectable row by row. It is entirely self-contained: no remote script, stylesheet, font or analytics, a strict Content-Security-Policy with per-render nonces, no cookies and no storage.
+
+Submitting a decision requires a distinct CSRF token in a custom header and a matching loopback origin, and the server re-verifies everything against the run it actually holds: the plan hash, the target, the environment, the scope, and that every selected id belongs to the plan. Exclusions are derived server-side rather than believed. A stale page, a replayed submission, or a second decision is refused. **Approving records an immutable, hash-bound, audited snapshot — it never runs anything.** Execution is a separate keystroke back in the terminal, producing a separate audit event and an idempotent execution request bound to the plan hash, the approval id and exactly the approved case ids.
 
 The Home screen is application-centred, not graph-centred:
 
@@ -269,9 +299,16 @@ src/
   config/      the one place environment variables are read
 ```
 
-**LangGraph** (`@langchain/langgraph`) is the durable orchestration engine: a single `StateGraph` with `discover`, `plan`, `approval_gate`, `execute`, `verify`, `report` nodes, compiled with a real SQLite checkpointer (`@langchain/langgraph-checkpoint-sqlite`) for crash-resume durability within one `.invoke()` call. The CLI's separate commands (`discover`, then later `plan`, then later `approve`, then later `run`) are separate process invocations of the same compiled graph; cross-command continuity comes from `RunRepository` persisting the full `TestRunState` between them, and the graph's entry router (`routeFromStatus`) always resumes at the correct node from the persisted `status` field. `approval_gate`'s own outgoing edge always stops at `END` regardless of the decision — running an approved plan is a deliberately separate command (`nova run`), never an automatic side effect of approving it.
+**LangGraph** (`@langchain/langgraph`) is the durable orchestration engine, and the only state machine in the product: a single `StateGraph` compiled with a real SQLite checkpointer (`@langchain/langgraph-checkpoint-sqlite`) for crash-resume durability within one `.invoke()` call. Its nodes are `resolve_inputs`, `probe_entry_context`, `ensure_authentication`, `discover_documents`, `collect_identification_evidence`, `identify_application_with_llm`, `confirm_application_identity`, `discover_application`, `reconcile_application_model`, `suggest_test_cases`, `validate_test_plan`, `open_approval_review`, `await_approval`, `revise_test_plan`, `await_execution_request`, `execution_preflight`, `execute_approved_tests`, `verify`, `generate_report`.
 
-**LangChain** (`@langchain/core`, `@langchain/openai`) backs the orchestrator's one LLM integration point: `plan` always computes the deterministic template first (`workflow/plan-templates.ts`, one read-only smoke case per visited page, one state-changing case per discovered form), then — only when `DEEPSEEK_API_KEY` is set — asks DeepSeek (via `@langchain/openai`'s `ChatOpenAI` pointed at DeepSeek's OpenAI-compatible endpoint, `services/llm/deepseek-plan-generator.ts`) to propose cases instead. Every proposed case is re-validated against `checkCaseScope` before it can reach approval, and `allowedDomains` is stamped by code, never accepted from the model; any case that fails scope, or a model call that throws, falls back to the template plan, so the plan is never empty and a missing/invalid key never breaks `nova plan`. No LLM calls exist anywhere else in the pipeline — discover, recovery, and natural-language journey matching stay fully deterministic.
+Every point where a person has to decide something is an interrupt: the graph routes to `END` and the next `.invoke()` resumes exactly where it stopped. Cross-process continuity comes from `RunRepository` persisting the full `TestRunState`, and the entry router (`routeFromStatus`) resumes at the correct node from the persisted `status` every time — a completed crawl or a completed model call is never repeated. The interrupts are: an authentication choice, an identification confirmation, an objective, an approval decision, and an execution request. `await_approval` always stops at `END` for an approved plan — running it is a separate, separately audited request (`await_execution_request` → `execution_preflight`), never a side effect of approving it. A "changes requested" decision is the one decision that continues, into `revise_test_plan` and back around to suggestion.
+
+**LangChain** (`@langchain/core`, `@langchain/openai`) backs Nova's two model integration points, both structured-output chains with bounded timeouts and retries, and both constructed from one provider-neutral factory (`services/llm/provider.ts`, configured with `NOVA_LLM_PROVIDER` / `NOVA_LLM_MODEL` / `NOVA_LLM_BASE_URL` / `NOVA_LLM_API_KEY`; `DEEPSEEK_API_KEY` alone still works). Supported providers are hosted OpenAI, DeepSeek, any OpenAI-compatible gateway, a local Ollama, and a self-hosted enterprise endpoint. No credential or model name is hard-coded anywhere.
+
+1. **Application identification** (`services/llm/identify-application.ts`) answers "what is this application?" from a bounded, sanitized `ApplicationEvidencePackage` — page titles, nav and form labels, route patterns, login characteristics, published OpenAPI/sitemap/help content — where every item carries a stable `E-nnn` id. Never sent: passwords, tokens, cookies, headers, raw DOM, script/style content, hidden text, or anything matching a credential shape (those items are dropped, not masked). The evidence is labelled and delimited, declared to the model as data rather than instructions, and the model is given no tools. Its answer is then checked in code (`validateIdentification`): unknown evidence references are dropped, conclusions with no surviving evidence are rejected, confidence is clamped, and output containing instruction-shaped text is refused outright. Results are cached on the sanitized evidence hash, so a resume never pays for the same call twice. When the model is unavailable or its answer fails validation, Nova records an honest zero-confidence `degraded` artifact — it never fabricates a successful identification.
+2. **Test-case suggestion** (`services/llm/suggest-test-cases.ts`) proposes candidates alongside the deterministic rule pack (`workflow/plan-templates.ts`). Every candidate from either source passes the same deterministic validation (`services/testmap/suggestion-validation.ts`): scope, target, route existence, persona, fixture availability, policy ceiling, duplicates, side-effect classification, evidence traceability, and executability. `allowedDomains`, case ids, side-effect class, and required approval level are all stamped by code, never accepted from the model.
+
+The model proposes; it never approves a test, widens scope, selects a credential, drives a browser, or authorizes execution. A failed or unconfigured model costs the extra candidates and nothing else.
 
 **Zod** validates every schema in `domain/schemas/` — the same schemas are the graph's state contract, the SQLite persistence contract, and the MCP tool input/output contract; there is exactly one definition of what a `TestPlan` or `TestRunState` looks like.
 

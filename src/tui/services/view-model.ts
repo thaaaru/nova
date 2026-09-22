@@ -11,11 +11,26 @@ import { filterEventsByVerbosity } from "./verbosity.js";
  */
 
 const STAGE_BY_STATUS: Record<TestRunState["status"], TimelineStageId> = {
+  // The guided flow's pre-discovery stages all render as "discover": the
+  // stage tracker is a six-step operator-facing summary, not a mirror of
+  // every internal node.
+  new: "discover",
+  context_discovery: "discover",
+  authentication_required: "discover",
+  authenticated: "discover",
+  document_discovery: "discover",
+  application_identification: "discover",
+  identification_confirmation: "discover",
   discovering: "discover",
   planning: "plan",
   awaiting_approval: "approval",
   approved: "approval",
   rejected: "approval",
+  changes_requested: "plan",
+  execution_requested: "execute",
+  preflight: "execute",
+  paused: "execute",
+  stopped: "execute",
   executing: "execute",
   verifying: "verify",
   completed: "report",

@@ -4,8 +4,11 @@ import { Box, Text, useInput } from "ink";
 import type { RunViewModel } from "../../domain/index.js";
 import { palette } from "../theme/palette.js";
 import { KeyHintBar } from "../components/KeyHintBar.js";
+import { StageTracker } from "../components/StageTracker.js";
 import {
   buildMapHomeMenuItems,
+  recommendedFlowStage,
+  recommendedMenuOptionId,
   type MapHomeMenuOptionId,
   type MapHomeSummary,
 } from "../services/testmap-view-model.js";
@@ -19,16 +22,19 @@ type MapHomeScreenProps = {
   onCycleVerbosity: () => void;
   /** False while the `:`-mode command bar owns keyboard input. */
   inputActive?: boolean;
+  animationEnabled?: boolean;
 };
 
-const HOME_KEY_HINTS = [
-  { key: "1-7", label: "Select" },
-  { key: "Enter", label: "Select" },
-  { key: "up/down", label: "Navigate" },
-  { key: "V", label: "Verbosity" },
-  { key: ":", label: "Command" },
-  { key: "Q", label: "Quit" },
-];
+function buildKeyHints(primaryLabel: string, optionCount: number): Array<{ key: string; label: string }> {
+  return [
+    { key: "Enter", label: primaryLabel },
+    { key: `1-${optionCount}`, label: "Other actions" },
+    { key: "up/down", label: "Navigate" },
+    { key: "V", label: "Verbosity" },
+    { key: ":", label: "Command" },
+    { key: "Q", label: "Quit" },
+  ];
+}
 
 /**
  * The Application Test Map product's home menu — the TUI's default
@@ -37,6 +43,13 @@ const HOME_KEY_HINTS = [
  * anything that imports it, e.g. a future "advanced" surface). Every
  * figure in the summary panel comes from `buildMapHomeSummary`, which
  * only reads the active ApplicationTestMap — never a new service call.
+ *
+ * One primary action per screen (per the product spec): the stage
+ * tracker and the cursor's starting position both point at
+ * `recommendedMenuOptionId`, so Enter runs the safest logical next step
+ * without requiring the operator to read the full numbered list first.
+ * The list itself stays reachable for every other action — progressive
+ * disclosure, not a hidden flow.
  */
 export function MapHomeScreen({
   summary,
@@ -45,9 +58,17 @@ export function MapHomeScreen({
   onQuit,
   onCycleVerbosity,
   inputActive = true,
+  animationEnabled = true,
 }: MapHomeScreenProps): React.ReactElement {
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const menuItems = buildMapHomeMenuItems(summary.hasMap);
+  const recommendedOptionId = recommendedMenuOptionId(summary);
+  const recommendedIndex = Math.max(
+    0,
+    menuItems.findIndex((item) => item.id === recommendedOptionId),
+  );
+  const [selectedIndex, setSelectedIndex] = useState(recommendedIndex);
+  const primaryLabel = menuItems[selectedIndex]?.label ?? "Select";
+  const stage = recommendedFlowStage(summary);
   useInput(
     (input, key) => {
       if (key.upArrow) {
@@ -81,6 +102,9 @@ export function MapHomeScreen({
             ? `NOVA — ${summary.applicationName} / ${summary.environment}`
             : "NOVA — APPLICATION TEST MAP"}
         </Text>
+      </Box>
+      <Box marginTop={1}>
+        <StageTracker currentStage={stage} />
       </Box>
       <Box
         flexDirection="column"
@@ -138,7 +162,7 @@ export function MapHomeScreen({
           </Text>
         ) : null}
       </Box>
-      <KeyHintBar hints={HOME_KEY_HINTS} />
+      <KeyHintBar hints={buildKeyHints(primaryLabel, menuItems.length)} />
     </Box>
   );
 }

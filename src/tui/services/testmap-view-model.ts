@@ -2,6 +2,7 @@ import type {
   ApplicationArea,
   ApplicationTestMap,
   ExecutionModeLabel,
+  TimelineStageId,
   UserJourney,
 } from "../../domain/index.js";
 import { POLICY_MODE_LABEL } from "./view-model.js";
@@ -13,7 +14,8 @@ import { POLICY_MODE_LABEL } from "./view-model.js";
  * product spec's wording so operators can drive the menu by digit key.
  */
 export type MapHomeMenuOptionId =
-  | "discover-app"
+  | "guided-test"
+  | "manage-projects"
   | "test-area"
   | "describe-test"
   | "recommendations"
@@ -23,28 +25,36 @@ export type MapHomeMenuOptionId =
   | "command-mode";
 
 const GUIDED_MENU_ITEMS: Array<{ id: MapHomeMenuOptionId; label: string }> = [
+  { id: "guided-test", label: "Test an application end to end" },
   { id: "test-area", label: "Test an application area" },
   { id: "describe-test", label: "Describe a test" },
   { id: "recommendations", label: "Run recommended regression tests" },
   { id: "explore-map", label: "Explore or update application map" },
   { id: "failures", label: "Review failures and recoveries" },
   { id: "reports", label: "Open recent reports" },
+  { id: "manage-projects", label: "Manage projects & applications" },
   { id: "command-mode", label: "Advanced command mode" },
 ];
 
 /**
  * Builds the home menu's numbered options for the current map state, per
- * the product spec's seven-item guided menu. "Discover an application"
- * is only offered as an empty-state affordance (`hasMap` false) — once a
- * map exists it drops off the numbered list in favor of the seven
- * guided options below it.
+ * the product spec's seven-item guided menu plus "manage-projects" —
+ * reachable at every map state, not just the empty one, so an operator
+ * can keep switching projects or adding applications after the first.
+ * Empty state promotes it to the top and relabels it "Choose or create a
+ * project"; once a map exists it stays in the guided list as "Manage
+ * projects & applications" instead of disappearing.
  */
 export function buildMapHomeMenuItems(
   hasMap: boolean,
 ): Array<{ id: MapHomeMenuOptionId; number: number; label: string }> {
   const items = hasMap
     ? GUIDED_MENU_ITEMS
-    : [{ id: "discover-app" as const, label: "Discover an application" }, ...GUIDED_MENU_ITEMS];
+    : [
+        { id: "guided-test" as const, label: "Test an application end to end" },
+        { id: "manage-projects" as const, label: "Choose or create a project" },
+        ...GUIDED_MENU_ITEMS.filter((item) => item.id !== "manage-projects" && item.id !== "guided-test"),
+      ];
   return items.map((item, index) => ({ ...item, number: index + 1 }));
 }
 
@@ -106,6 +116,45 @@ export function buildMapHomeSummary(map: ApplicationTestMap | undefined): MapHom
     journeysNeedingReviewCount,
     executionModeLabel: POLICY_MODE_LABEL[map.approvedScope.executionMode] ?? map.approvedScope.executionMode,
   };
+}
+
+/**
+ * The single "safest logical next action" for the current map state —
+ * this is what Enter runs by default and what the stage tracker reflects,
+ * so the home screen presents one guided path instead of a flat menu of
+ * equally-weighted options. Never a new policy/business decision: purely
+ * a read of state already computed by buildMapHomeSummary.
+ *
+ *   no map yet           -> choose or create a project
+ *   drafts await review  -> open the map to approve them
+ *   approved, never run  -> run the recommended regression tests
+ *   already run          -> same as above, so operators can iterate
+ */
+export function recommendedMenuOptionId(summary: MapHomeSummary): MapHomeMenuOptionId {
+  if (!summary.hasMap) {
+    return "guided-test";
+  }
+  if (summary.journeysNeedingReviewCount > 0) {
+    return "explore-map";
+  }
+  if (summary.approvedJourneyCount > 0) {
+    return "recommendations";
+  }
+  return "explore-map";
+}
+
+/** The FLOW stage the home screen's tracker should highlight for the current map state. */
+export function recommendedFlowStage(summary: MapHomeSummary): TimelineStageId {
+  if (!summary.hasMap) {
+    return "discover";
+  }
+  if (summary.journeysNeedingReviewCount > 0) {
+    return "approval";
+  }
+  if (!summary.latestRunOutcome) {
+    return "execute";
+  }
+  return "report";
 }
 
 export type AreaSummary = ApplicationArea & {

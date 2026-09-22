@@ -26,6 +26,7 @@ export interface ApplicationTestMapRepository {
   save(map: ApplicationTestMap): void;
   get(mapId: string): ApplicationTestMap | undefined;
   list(): ApplicationTestMap[];
+  delete(mapId: string): void;
   acquireFixtureLock(mapId: string, fixtureId: string, runId: string): boolean;
   releaseFixtureLock(mapId: string, fixtureId: string, runId: string): void;
   isFixtureLocked(mapId: string, fixtureId: string): boolean;
@@ -79,6 +80,11 @@ export class SqliteApplicationTestMapRepository implements ApplicationTestMapRep
       map_json: string;
     }>;
     return rows.map((row) => ApplicationTestMapSchema.parse(JSON.parse(row.map_json)));
+  }
+
+  delete(mapId: string): void {
+    this.db.prepare(`DELETE FROM test_maps WHERE map_id = ?`).run(mapId);
+    this.db.prepare(`DELETE FROM fixture_locks WHERE map_id = ?`).run(mapId);
   }
 
   /**

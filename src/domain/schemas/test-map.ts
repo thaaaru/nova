@@ -32,6 +32,14 @@ export const ApprovedScopeSchema = z.object({
    * this map should reuse to crawl/execute as a signed-in user.
    */
   storageStatePath: z.string().min(1).optional(),
+  /**
+   * Which project-level test persona (see domain/schemas/persona.ts)
+   * this map's session came from, if any — purely an identity/reuse
+   * label the TUI surfaces as "Persona: QA Admin"; the actual session
+   * material stays in `storageStatePath` above and the persona's own
+   * encrypted vault entry, never here.
+   */
+  personaId: z.string().min(1).optional(),
 });
 export type ApprovedScope = z.infer<typeof ApprovedScopeSchema>;
 
@@ -135,6 +143,13 @@ export type ApplicationTestMapStatus = z.infer<typeof ApplicationTestMapStatusSc
 export const ApplicationTestMapSchema = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
+  /**
+   * Optional for backward compatibility with maps drafted before Projects
+   * existed. Every map drafted through `discoverMap` now sets this —
+   * the operator picks or creates a project as the first step of
+   * discovery, and the resulting map is added inside it.
+   */
+  projectId: z.string().min(1).optional(),
   applicationName: z.string().min(1),
   targetUrl: z.string().url(),
   environment: ApplicationTestMapEnvironmentSchema,

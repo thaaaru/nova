@@ -15,6 +15,8 @@ export type DiscoveryToMapOptions = {
   applicationName: string;
   environment: ApplicationTestMapEnvironment;
   allowedDomains: string[];
+  /** The Project this map is added inside. Omitted only for maps drafted before Projects existed. */
+  projectId?: string;
 };
 
 /**
@@ -139,6 +141,15 @@ function controlJourneysForPage(page: DiscoveredPage, areaId: string): UserJourn
     }
     seenText.add(text);
 
+    const role = control.kind === "link" ? "link" : "button";
+    // A link's href is the one generically verifiable outcome of
+    // activating it (Playwright resolves relative hrefs against the
+    // page's own URL). A button has no such guarantee — the best honest,
+    // app-agnostic check is that clicking it didn't crash the page out to
+    // some other route, so we pin the assertion to the page's own path.
+    const expectedUrlFragment =
+      control.kind === "link" && control.href ? control.href : new URL(page.url).pathname;
+
     journeys.push({
       id: `journey-${slug(page.title || page.url)}-control-${slug(text)}-${slug(areaId)}`.slice(0, 80),
       areaId,
@@ -155,8 +166,11 @@ function controlJourneysForPage(page: DiscoveredPage, areaId: string): UserJourn
           riskLevel: "medium",
           requiresApproval: true,
           evidenceRequirements: ["screenshot"],
-          steps: [{ kind: "navigate", url: page.url, timeoutMs: 10_000 }],
-          assertions: [{ kind: "urlContains", expected: "" }],
+          steps: [
+            { kind: "navigate", url: page.url, timeoutMs: 10_000 },
+            { kind: "click", role, name: text, timeoutMs: 10_000 },
+          ],
+          assertions: [{ kind: "urlContains", expected: expectedUrlFragment }],
         },
       ],
       allowedRecoveryActions: ["role_name_match", "visible_text_match"],
@@ -228,6 +242,7 @@ export function buildDraftMapFromDiscovery(
   return {
     id: randomUUID(),
     version: "0.1.0-draft",
+    projectId: options.projectId,
     applicationName: options.applicationName,
     targetUrl: discovery.targetUrl,
     environment: options.environment,

@@ -63,9 +63,19 @@ export type TestPlan = z.infer<typeof TestPlanSchema>;
 
 export const ApprovalSchema = z.object({
   planId: z.string().min(1),
-  decision: z.enum(["approved", "rejected"]),
+  /**
+   * "changes_requested" sends the graph back to revise the plan rather
+   * than to execute or terminate — see workflow/router.ts. The two
+   * original decisions are unchanged, so every existing caller of
+   * `nova approve` / `nova approve --reject` behaves exactly as before.
+   */
+  decision: z.enum(["approved", "changes_requested", "rejected"]),
   reviewer: z.string().min(1),
   decidedAt: z.string().datetime(),
   note: z.string().optional(),
+  /** Links this decision to its immutable ApprovedPlanSnapshot when the decision came through the HTML review page. */
+  approvalId: z.string().min(1).optional(),
+  /** The subset the reviewer actually approved. Empty/absent means the whole plan. */
+  selectedTestCaseIds: z.array(z.string().min(1)).optional(),
 });
 export type Approval = z.infer<typeof ApprovalSchema>;

@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,7 @@ import React from "react";
 
 import { buildRuntime, type NovaRuntime } from "../../src/cli/context.js";
 import { MapDiscoverScreen } from "../../src/tui/screens/MapDiscoverScreen.js";
+import { createProject } from "../../src/services/testmap/project-service.js";
 
 // A real static file server for fixtures/demo-app, exactly like a QA
 // engineer would point Nova at a real running application — no mocked
@@ -90,6 +91,17 @@ async function pressEnter(stdin: { write: (data: string) => void }): Promise<voi
   await settle();
 }
 
+// The project-select step always starts on "+ Create a new project" for a
+// fresh runtime with no projects yet — pressing Enter selects it, exactly
+// like an operator's first-ever discover.
+async function createProjectAndContinue(
+  stdin: { write: (data: string) => void },
+  name: string,
+): Promise<void> {
+  await pressEnter(stdin); // select "+ Create a new project"
+  await typeAndSubmit(stdin, name);
+}
+
 // The application-name field starts pre-filled with a name derived from
 // the target's hostname; the cursor sits at the end of that text, so
 // typing without clearing it first would append rather than replace —
@@ -106,7 +118,7 @@ async function clearAndType(stdin: { write: (data: string) => void }, text: stri
 }
 
 describe("MapDiscoverScreen", () => {
-  it("walks target URL -> name -> environment -> no-auth -> confirm and drafts a real map from a live target", async () => {
+  it("walks target URL -> name -> environment -> auto-detects no auth required -> confirm and drafts a real map from a live target", async () => {
     let completedMap: string | undefined;
     const { stdin, lastFrame } = render(
       <MapDiscoverScreen
@@ -120,6 +132,13 @@ describe("MapDiscoverScreen", () => {
       />,
     );
 
+    expect(lastFrame() ?? "").toContain("Which project");
+    await createProjectAndContinue(stdin, "Demo Project");
+
+    // index.html has no password field/login redirect/401 — the real
+    // detectAuthRequirement probe should find nothing to sign in for,
+    // never asking the operator a blind "does this need sign-in?"
+    // question.
     await typeAndSubmit(stdin, baseUrl);
 
     expect(lastFrame() ?? "").toContain("Application name");
@@ -128,11 +147,26 @@ describe("MapDiscoverScreen", () => {
     expect(lastFrame() ?? "").toContain("Environment");
     await pressEnter(stdin); // accept the pre-selected environment
 
-    expect(lastFrame() ?? "").toContain("require sign-in");
-    await pressEnter(stdin); // accept "No — public pages only"
+    // The probe is genuinely asynchronous, so the "checking…" frame is
+    // transient: on a warm machine it can resolve before this assertion
+    // ever observes it. What matters is that the screen is either still
+    // probing or already past it — never stuck asking the operator a
+    // blind "does this need sign-in?" question.
+    const afterEnvironment = lastFrame() ?? "";
+    expect(
+      afterEnvironment.includes("Checking whether sign-in is required") ||
+        afterEnvironment.includes("Add to project"),
+    ).toBe(true);
 
-    expect(lastFrame() ?? "").toContain("Crawl");
-    expect(lastFrame() ?? "").not.toContain("signed in via");
+    // The auth probe is a real headless browser navigation — poll for
+    // it to resolve instead of a fixed sleep.
+    const authProbeDeadline = Date.now() + 15_000;
+    while (!(lastFrame() ?? "").includes("Add to project") && Date.now() < authProbeDeadline) {
+      await settle(200);
+    }
+    await settle();
+    expect(lastFrame() ?? "").toContain("Add to project");
+    expect(lastFrame() ?? "").not.toContain("persona");
     await pressEnter(stdin); // confirm and start discovery
 
     // Real, non-mocked discovery against the live demo server — poll
@@ -144,6 +178,7 @@ describe("MapDiscoverScreen", () => {
     while (!(lastFrame() ?? "").includes("MAP DRAFTED") && Date.now() < draftDeadline) {
       await settle(200);
     }
+    await settle();
     expect(lastFrame() ?? "").toContain("MAP DRAFTED");
     await pressEnter(stdin);
 
@@ -151,34 +186,43 @@ describe("MapDiscoverScreen", () => {
     const savedMaps = runtime.testMaps.list();
     expect(savedMaps).toHaveLength(1);
     expect(savedMaps[0]?.approvedScope.storageStatePath).toBeUndefined();
+    expect(savedMaps[0]?.approvedScope.personaId).toBeUndefined();
   }, 30_000);
 
-  it("offers a storage-state path step when the operator says the app requires sign-in, and rejects a missing file", async () => {
+  it("auto-detects a sign-in wall and offers the persona sub-flow, rejecting an empty persona name", async () => {
     const { stdin, lastFrame } = render(
       <MapDiscoverScreen runtime={runtime} onComplete={() => {}} onCancel={() => {}} />,
     );
 
-    await typeAndSubmit(stdin, baseUrl);
+    await createProjectAndContinue(stdin, "Demo Project");
+    // login.html has a password field, one button, and no links — the
+    // real probe's landing-page heuristic should classify it as
+    // requiring sign-in without the operator ever being asked upfront.
+    await typeAndSubmit(stdin, `${baseUrl}/login.html`);
     await clearAndType(stdin, "Demo Shop");
     await pressEnter(stdin);
 
-    expect(lastFrame() ?? "").toContain("require sign-in");
-    stdin.write("\u001B[B"); // move down to "Yes — use a session saved via `nova login`"
+    const authProbeDeadline = Date.now() + 15_000;
+    while (!(lastFrame() ?? "").includes("Authentication required") && Date.now() < authProbeDeadline) {
+      await settle(200);
+    }
+    await settle();
+    expect(lastFrame() ?? "").toContain("Authentication required");
+    expect(lastFrame() ?? "").toContain("Sign in in browser now");
+    expect(lastFrame() ?? "").toContain("Enter test-account reference");
+    expect(lastFrame() ?? "").toContain("Continue without signing in");
+
+    stdin.write("\u001B[B"); // move down to "Enter test-account reference"
     await settle();
     await pressEnter(stdin);
 
-    expect(lastFrame() ?? "").toContain("Session file saved by");
-    const missingPath = join(tempDir, "does-not-exist.json");
-    await typeAndSubmit(stdin, missingPath);
+    expect(lastFrame() ?? "").toContain("Name this test-account persona");
+    await typeAndSubmit(stdin, "");
+    expect(lastFrame() ?? "").toContain("Enter a name for this persona");
+  }, 20_000);
 
-    expect(lastFrame() ?? "").toContain("No file found");
-  }, 15_000);
-
-  it("reaches the confirm step with a real storage-state path and passes it through to the drafted map", async () => {
+  it("captures a persona via a real headed-browser sign-in and reuses it on the drafted map, never exposing a raw path", async () => {
     let completedMapId: string | undefined;
-    const storageStatePath = join(tempDir, "session.json");
-    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
-
     const { stdin, lastFrame } = render(
       <MapDiscoverScreen
         runtime={runtime}
@@ -189,31 +233,67 @@ describe("MapDiscoverScreen", () => {
       />,
     );
 
-    await typeAndSubmit(stdin, baseUrl);
+    await createProjectAndContinue(stdin, "Demo Project");
+    await typeAndSubmit(stdin, `${baseUrl}/login.html`);
     await clearAndType(stdin, "Demo Shop");
     await pressEnter(stdin);
-    stdin.write("\u001B[B");
-    await settle();
-    await pressEnter(stdin);
-    await typeAndSubmit(stdin, storageStatePath);
 
-    expect(lastFrame() ?? "").toContain("signed in via");
-    // The terminal frame wraps a long path across border-drawn lines, so
-    // assert on a distinctive fragment rather than the full contiguous
-    // string.
-    expect(lastFrame() ?? "").toContain("session.json");
+    const authProbeDeadline = Date.now() + 15_000;
+    while (!(lastFrame() ?? "").includes("Authentication required") && Date.now() < authProbeDeadline) {
+      await settle(200);
+    }
+    await settle();
+    expect(lastFrame() ?? "").toContain("+ Sign in in browser now");
+    await pressEnter(stdin); // "+ Sign in in browser now" is the first item
+
+    expect(lastFrame() ?? "").toContain("Name this persona");
+    await typeAndSubmit(stdin, "QA Admin");
+
+    // The real headed-browser capture waits for an operator Enter —
+    // give the headed browser a moment to open before confirming.
+    const openDeadline = Date.now() + 10_000;
+    while (!(lastFrame() ?? "").includes("Sign in in the browser window") && Date.now() < openDeadline) {
+      await settle(200);
+    }
+    await settle();
+    expect(lastFrame() ?? "").toContain("Sign in in the browser window");
+    await pressEnter(stdin); // "I'm signed in — capture this session"
+
+    const confirmDeadline = Date.now() + 10_000;
+    while (!(lastFrame() ?? "").includes("Add to project") && Date.now() < confirmDeadline) {
+      await settle(200);
+    }
+    await settle();
+    // The confirm line wraps across border-drawn lines for a target
+    // this long, so assert on distinctive fragments rather than one
+    // contiguous phrase.
+    expect(lastFrame() ?? "").toContain("persona");
+    expect(lastFrame() ?? "").toContain("QA Admin");
+    // The path/cookie mechanics are never surfaced to the operator.
+    expect(lastFrame() ?? "").not.toContain(".json");
+    expect(lastFrame() ?? "").not.toContain("vault");
     await pressEnter(stdin);
 
     const draftDeadline = Date.now() + 20_000;
     while (!(lastFrame() ?? "").includes("MAP DRAFTED") && Date.now() < draftDeadline) {
       await settle(200);
     }
+    await settle();
     expect(lastFrame() ?? "").toContain("MAP DRAFTED");
     await pressEnter(stdin);
 
     expect(completedMapId).toBeDefined();
     const saved = runtime.testMaps.get(completedMapId as string);
-    expect(saved?.approvedScope.storageStatePath).toBe(storageStatePath);
+    expect(saved?.approvedScope.personaId).toBeDefined();
+    expect(saved?.approvedScope.storageStatePath).toBeDefined();
+    // The map's own approvedScope holds a plain local session copy path
+    // (chmod 600, same trust model discovery/execution already used);
+    // the persona's own vault entry is the encrypted one.
+    const personas = runtime.personas.list(runtime.testMaps.list()[0]?.projectId as string);
+    expect(personas).toHaveLength(1);
+    expect(personas[0]?.name).toBe("QA Admin");
+    expect(personas[0]?.sessionStatus).toBe("ready");
+    expect(personas[0]?.vaultRef).toBeDefined();
   }, 30_000);
 
   it("Escape cancels and never leaves a partial map behind", async () => {
@@ -233,5 +313,20 @@ describe("MapDiscoverScreen", () => {
     await settle();
     expect(cancelled).toBe(true);
     expect(runtime.testMaps.list()).toHaveLength(0);
+  });
+
+  it("skips the project step entirely when launched with a presetProjectId — e.g. 'New app' inside an already-selected project", async () => {
+    const project = createProject(runtime, { name: "Preset Project" });
+    const { lastFrame } = render(
+      <MapDiscoverScreen
+        runtime={runtime}
+        presetProjectId={project.id}
+        onComplete={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(lastFrame() ?? "").not.toContain("Which project");
+    expect(lastFrame() ?? "").toContain("Target URL");
   });
 });

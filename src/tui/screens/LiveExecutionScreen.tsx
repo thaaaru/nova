@@ -180,10 +180,10 @@ export function LiveExecutionScreen({
     ]);
 
     const tickTimer = setInterval(() => {
-      setElapsedMs(Date.now() - startedAtRef.current);
       if (pausedRef.current || stoppedRef.current) {
         return;
       }
+      setElapsedMs(Date.now() - startedAtRef.current);
       setRunningIndex((previous) => {
         const next = Math.min(previous + 1, cases.length - 1);
         setStatuses((current) =>

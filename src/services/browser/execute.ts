@@ -75,7 +75,9 @@ async function runOnce(
   mkdirSync(outputDirectory, { recursive: true });
 
   const browser = await chromium.launch({ headless: options.headless ?? true });
-  const context = await browser.newContext();
+  const context = await browser.newContext(
+    options.manifest.storageStatePath ? { storageState: options.manifest.storageStatePath } : {},
+  );
   await context.tracing.start({ screenshots: true, snapshots: true });
 
   const consoleLogs: string[] = [];

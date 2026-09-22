@@ -89,7 +89,7 @@ export function HomeScreen({
     <Box flexDirection="column">
       <Header viewModel={viewModel} />
       <Box paddingX={1} marginY={1}>
-        <StageTracker currentStage={viewModel.currentStage} animationEnabled={animationEnabled} />
+        <StageTracker currentStage={viewModel.currentStage} />
       </Box>
       <Box flexDirection={isNarrow ? "column" : "row"} gap={1} paddingX={1}>
         <NextActionList actions={actions} blockers={viewModel.blockers} selectedIndex={selectedIndex} />

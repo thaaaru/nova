@@ -72,6 +72,13 @@ export function buildManifestFromMap(map: ApplicationTestMap): TargetManifest {
     environment: map.environment,
     description: `Application Test Map "${map.applicationName}" v${map.version}`,
     runExecutionMode: map.approvedScope.executionMode,
+    // Carries the map's captured signed-in session (if any) through to
+    // execution, so a journey run against an authenticated map actually
+    // runs as that signed-in user instead of silently falling back to an
+    // anonymous browser context — see executeTestCase in
+    // services/browser/execute.ts, which now honors this the same way
+    // discoverApplication already does.
+    storageStatePath: map.approvedScope.storageStatePath,
     createdAt: map.createdAt,
   };
 }

@@ -1,5 +1,6 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
+
+import { createChatModel, type LlmSettings } from "./provider.js";
 
 import type { DiscoverySnapshot, TargetManifest, TestCase } from "../../domain/index.js";
 import { TestCaseSchema } from "../../domain/index.js";
@@ -9,7 +10,7 @@ import { TestCaseSchema } from "../../domain/index.js";
  * the deterministic template planner builds, minus `id` (assigned by code
  * after validation, never trusted from the model) and minus `allowedDomains`
  * (the model is never given the choice — code stamps the manifest's own
- * allowedDomains onto every case it proposes, see createDeepSeekPlanGenerator).
+ * allowedDomains onto every case it proposes, see createPlanGenerator).
  *
  * This is the whole guardrail: the model can only ever propose steps,
  * assertions, and risk metadata shaped like a TestCase. It cannot invent a
@@ -30,14 +31,10 @@ export type GenerateCasesInput = {
 
 export type PlanGenerator = (input: GenerateCasesInput) => Promise<TestCase[]>;
 
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-
 /**
- * The orchestrator's one LLM integration point, backed by DeepSeek's
- * OpenAI-compatible chat completions API (same request/response shape as
- * OpenAI, just a different base URL and model — @langchain/openai's
- * ChatOpenAI talks to it directly via `configuration.baseURL`, no separate
- * SDK needed). Everything upstream and downstream of this call is
+ * The orchestrator's one LLM integration point, built on the provider-neutral
+ * model factory in provider.ts (any OpenAI-compatible endpoint: hosted,
+ * gateway, self-hosted, or local). Everything upstream and downstream of this call is
  * deterministic code (see plan-templates.ts, scope-policy.ts): the model
  * only ever *proposes* a plan shaped like the domain schema; createPlanNode
  * re-validates every case against checkCaseScope before anything is stored
@@ -45,14 +42,10 @@ const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
  * model is never told it can change allowedDomains — that's stamped by code
  * after the call returns.
  */
-export function createDeepSeekPlanGenerator(options: { apiKey: string; model?: string }): PlanGenerator {
-  const chat = new ChatOpenAI({
-    apiKey: options.apiKey,
-    model: options.model ?? "deepseek-chat",
-    temperature: 0,
-    configuration: { baseURL: DEEPSEEK_BASE_URL },
+export function createPlanGenerator(settings: LlmSettings): PlanGenerator {
+  const structured = createChatModel(settings).withStructuredOutput(ProposedPlanSchema, {
+    name: "propose_test_plan",
   });
-  const structured = chat.withStructuredOutput(ProposedPlanSchema, { name: "propose_test_plan" });
 
   return async ({ objective, manifest, snapshot }) => {
     const prompt = buildPrompt(objective, manifest, snapshot);

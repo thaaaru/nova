@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Box, Text, useApp } from "ink";
+import React, { useMemo, useRef, useState } from "react";
+import { Box, Text, useApp, useInput } from "ink";
 
 import { runApprove, runDiscover, runPlan, runReport, type ExecutionResultSummary } from "../cli/commands.js";
 import type { NovaRuntime } from "../cli/context.js";
@@ -27,6 +27,8 @@ import { DescribeTestScreen } from "./screens/DescribeTestScreen.js";
 import { RecommendationsScreen } from "./screens/RecommendationsScreen.js";
 import { ExploreMapScreen } from "./screens/ExploreMapScreen.js";
 import { FailuresScreen } from "./screens/FailuresScreen.js";
+import { ProjectScreen } from "./screens/ProjectScreen.js";
+import { TestFlowScreen } from "./screens/TestFlowScreen.js";
 import { CommandBar } from "./command-mode/CommandBar.js";
 import { parseCommand } from "./command-mode/parse-command.js";
 import { toCommandIntent } from "./command-mode/to-intent.js";
@@ -40,6 +42,8 @@ import { makeEvent } from "./services/make-event.js";
 import { openPathWithOsOpener } from "./services/open-path.js";
 import { loadTuiSettings, saveTuiSettings } from "./theme/settings.js";
 import { palette } from "./theme/palette.js";
+import { Banner } from "./components/Banner.js";
+import { useTerminalSize } from "./hooks/useTerminalSize.js";
 
 type Screen =
   | "home"
@@ -56,11 +60,45 @@ type Screen =
   | "map-describe-test"
   | "map-recommendations"
   | "map-explore"
-  | "map-failures";
+  | "map-failures"
+  | "project-manage"
+  | "guided-test";
 
 type AppProps = {
   runtime: NovaRuntime;
+  showBanner?: boolean;
+  /** Set by `nova test <url>`: skips Home and starts the guided flow against that target. */
+  initialTarget?: string;
+  /** Set by `nova test` with no URL: opens the guided flow, which resumes or asks for the target. */
+  startInGuidedFlow?: boolean;
 };
+
+/**
+ * A run the guided flow can pick back up: anything that stopped at a
+ * human decision rather than finishing. A completed/failed/rejected run
+ * is history, not work in progress.
+ */
+const RESUMABLE_STATUSES = new Set<TestRunState["status"]>([
+  "new",
+  "context_discovery",
+  "authentication_required",
+  "authenticated",
+  "document_discovery",
+  "application_identification",
+  "identification_confirmation",
+  "discovering",
+  "planning",
+  "awaiting_approval",
+  "changes_requested",
+  "approved",
+  "execution_requested",
+  "preflight",
+  "paused",
+]);
+
+function resumableRun(run: TestRunState | undefined): TestRunState | undefined {
+  return run && RESUMABLE_STATUSES.has(run.status) ? run : undefined;
+}
 
 function loadInitialRun(runtime: NovaRuntime): TestRunState | undefined {
   const runId = getCurrentRunId(runtime.config);
@@ -73,14 +111,41 @@ function loadInitialRun(runtime: NovaRuntime): TestRunState | undefined {
  * never reimplements discover/plan/approve/execute/report logic, it only
  * wires the real calls to screen transitions and to the shared event feed.
  */
-export function App({ runtime }: AppProps): React.ReactElement {
+export function App({ runtime, showBanner, initialTarget, startInGuidedFlow }: AppProps): React.ReactElement {
   const { exit } = useApp();
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreen] = useState<Screen>(initialTarget || startInGuidedFlow ? "guided-test" : "home");
   const [run, setRun] = useState<TestRunState | undefined>(() => loadInitialRun(runtime));
   const [settings, setSettings] = useState(() => loadTuiSettings(runtime.config));
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [guidedSetupInitial, setGuidedSetupInitial] = useState<Partial<GuidedSetupInput> | undefined>(
     undefined,
+  );
+  const [bannerVisible, setBannerVisible] = useState(showBanner === true);
+  const bannerMountedAtRef = useRef(Date.now());
+  const { columns } = useTerminalSize();
+  useInput(
+    (input, key) => {
+      // Guards against two sources of spurious input on the freshly
+      // attached raw-mode stdin: (1) a stray Enter left over from the
+      // shell command that launched this process, and (2) terminal
+      // shell-integration responses (cursor-position/OSC query replies
+      // some terminals send to a newly foregrounded process), which
+      // arrive as raw escape-sequence bytes rather than a real keypress.
+      // Only a real Return, Escape, or printable character — arriving
+      // after the guard window — dismisses the banner.
+      const elapsedMs = Date.now() - bannerMountedAtRef.current;
+      const isRealKeystroke = key.return || key.escape || (input.length > 0 && !input.includes("\u001b"));
+      if (process.env.NOVA_DEBUG_BANNER) {
+        process.stderr.write(
+          `[nova] banner input received at +${elapsedMs}ms (guard=300ms) real=${isRealKeystroke} raw=${JSON.stringify(input)}\n`,
+        );
+      }
+      if (!isRealKeystroke || elapsedMs < 300) {
+        return;
+      }
+      setBannerVisible(false);
+    },
+    { isActive: bannerVisible },
   );
   const [executionPaused, setExecutionPaused] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -92,6 +157,7 @@ export function App({ runtime }: AppProps): React.ReactElement {
   const [selectedAreaId, setSelectedAreaId] = useState<string | undefined>(undefined);
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | undefined>(undefined);
   const [selectedContext, setSelectedContext] = useState<SelectedTestContext | undefined>(undefined);
+  const [discoverProjectId, setDiscoverProjectId] = useState<string | undefined>(undefined);
   const [journeyExecutor, setJourneyExecutor] = useState<(() => Promise<ExecutionResultSummary>) | undefined>(
     undefined,
   );
@@ -117,8 +183,12 @@ export function App({ runtime }: AppProps): React.ReactElement {
   }
 
   function handleMapHomeSelect(optionId: MapHomeMenuOptionId): void {
-    if (optionId === "discover-app") {
-      setScreen("map-discover");
+    if (optionId === "guided-test") {
+      setScreen("guided-test");
+      return;
+    }
+    if (optionId === "manage-projects") {
+      setScreen("project-manage");
       return;
     }
     if (optionId === "command-mode") {
@@ -141,10 +211,11 @@ export function App({ runtime }: AppProps): React.ReactElement {
       return;
     }
     if (!activeMap) {
-      // Every remaining option needs a map — send the operator straight
-      // into discovery instead of dead-ending on a message that names a
-      // shell command they would have to leave the TUI to run.
-      setScreen("map-discover");
+      // Every remaining option needs a map — send the operator to
+      // project management to choose or create one, instead of
+      // dead-ending on a message that names a shell command they would
+      // have to leave the TUI to run.
+      setScreen("project-manage");
       return;
     }
     if (optionId === "test-area") {
@@ -326,6 +397,10 @@ export function App({ runtime }: AppProps): React.ReactElement {
     void runCommandIntent(parsed.name, parsed.args);
   }
 
+  if (bannerVisible) {
+    return <Banner columns={columns} />;
+  }
+
   return (
     <Box flexDirection="column">
       {screen === "home" ? (
@@ -336,18 +411,60 @@ export function App({ runtime }: AppProps): React.ReactElement {
           onQuit={exit}
           onCycleVerbosity={cycleVerbosity}
           inputActive={!commandOpen}
+          animationEnabled={settings.animation}
+        />
+      ) : null}
+
+      {screen === "guided-test" ? (
+        <TestFlowScreen
+          runtime={runtime}
+          presetTarget={initialTarget}
+          resumeRun={initialTarget ? undefined : resumableRun(run)}
+          reviewer={process.env.NOVA_REVIEWER ?? "tui-operator"}
+          onExecute={(requested, executor) => {
+            setRun(requested);
+            // The guided flow supplies its own executor (which makes the
+            // execution request and runs the approved snapshot); without
+            // it the screen would fall back to `runExecution`, which
+            // refuses anything that is not still sitting at "approved".
+            setJourneyExecutor(() => executor);
+            setExecutionPaused(false);
+            setScreen("live-execution");
+          }}
+          onCancel={() => setScreen("home")}
         />
       ) : null}
 
       {screen === "map-discover" ? (
         <MapDiscoverScreen
           runtime={runtime}
+          presetProjectId={discoverProjectId}
           onComplete={(map) => {
             setMapId(map.id);
+            setDiscoverProjectId(undefined);
             refreshMaps();
             setScreen("map-explore");
           }}
-          onCancel={() => setScreen("home")}
+          onCancel={() => {
+            setDiscoverProjectId(undefined);
+            setScreen("home");
+          }}
+        />
+      ) : null}
+
+      {screen === "project-manage" ? (
+        <ProjectScreen
+          runtime={runtime}
+          onSelectApp={(selectedMapId) => {
+            setMapId(selectedMapId);
+            refreshMaps();
+            setScreen("home");
+          }}
+          onCreateApp={(projectId) => {
+            setDiscoverProjectId(projectId);
+            setScreen("map-discover");
+          }}
+          onBack={() => setScreen("home")}
         />
       ) : null}
 
@@ -445,6 +562,11 @@ export function App({ runtime }: AppProps): React.ReactElement {
           runtime={runtime}
           map={activeMap}
           onMapChanged={refreshMaps}
+          onSelectJourney={(areaId, journeyId) => {
+            setSelectedAreaId(areaId);
+            setSelectedJourneyId(journeyId);
+            setScreen("map-context");
+          }}
           onBack={() => setScreen("home")}
         />
       ) : null}

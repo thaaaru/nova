@@ -11,3 +11,14 @@
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
 /auth/
+
+# Captured browser sessions — never commit (see services/security/session-vault.ts).
+/login
+*.session
+/session-vault/
+/nova-v0.2/
+/nova-v0.3/
+/nova-v0.4/
+/nova-guided/
+/graphify-out/
+/tekassure/

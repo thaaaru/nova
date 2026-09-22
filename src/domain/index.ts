@@ -8,3 +8,8 @@ export * from "./schemas/recovery.js";
 export * from "./schemas/reporting.js";
 export * from "./schemas/tui.js";
 export * from "./schemas/test-map.js";
+export * from "./schemas/project.js";
+export * from "./schemas/persona.js";
+export * from "./schemas/identification.js";
+export * from "./schemas/approval.js";
+export * from "./schemas/suggestion.js";

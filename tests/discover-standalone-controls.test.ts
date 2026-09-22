@@ -163,6 +163,58 @@ describe("buildDraftMapFromDiscovery — standalone controls", () => {
     expect(journey?.checkpoints[0]?.riskLevel).toBe("medium");
     expect(journey?.checkpoints[0]?.requiresApproval).toBe(true);
   });
+
+  it("actually clicks the discovered button — not just navigates and calls it done", () => {
+    const pages = [
+      page({
+        url: "https://example.com/dashboard",
+        title: "Dashboard",
+        buttons: [{ kind: "button", text: "Collapse" }],
+      }),
+    ];
+
+    const map = buildDraftMapFromDiscovery(snapshot(pages), {
+      applicationName: "example",
+      environment: "staging",
+      allowedDomains: ["example.com"],
+    });
+
+    const journey = map.areas
+      .flatMap((area) => area.journeys)
+      .find((candidate) => candidate.name.includes("Collapse"));
+    const steps = journey?.checkpoints[0]?.steps ?? [];
+    expect(steps.map((step) => step.kind)).toEqual(["navigate", "click"]);
+    expect(steps[1]).toMatchObject({ kind: "click", role: "button", name: "Collapse" });
+    // The old placeholder assertion (`urlContains: ""`) always passes no
+    // matter what happens — a journey named after a control has to assert
+    // something a real click could actually fail.
+    expect(journey?.checkpoints[0]?.assertions[0]?.expected).not.toBe("");
+  });
+
+  it("asserts against the link's own href for a standalone link control", () => {
+    const pages = [
+      page({
+        url: "https://example.com/dashboard",
+        title: "Dashboard",
+        buttons: [{ kind: "link", text: "View owner", href: "/owners/42" }],
+      }),
+    ];
+
+    const map = buildDraftMapFromDiscovery(snapshot(pages), {
+      applicationName: "example",
+      environment: "staging",
+      allowedDomains: ["example.com"],
+    });
+
+    const journey = map.areas
+      .flatMap((area) => area.journeys)
+      .find((candidate) => candidate.name.includes("View owner"));
+    expect(journey?.checkpoints[0]?.steps[1]).toMatchObject({ kind: "click", role: "link", name: "View owner" });
+    expect(journey?.checkpoints[0]?.assertions[0]).toMatchObject({
+      kind: "urlContains",
+      expected: "/owners/42",
+    });
+  });
 });
 
 describe("buildDraftMapFromDiscovery — real end-to-end discovery of a standalone control", () => {

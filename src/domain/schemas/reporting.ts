@@ -185,6 +185,33 @@ export const GovernanceSchema = z.object({
   approverName: z.string().optional(),
   approvalDecision: z.enum(["approved", "rejected"]).optional(),
   approvalDecidedAt: z.string().datetime().optional(),
+  /**
+   * Full discovery-to-evidence provenance for this run, so a reader can
+   * trace any result back to the snapshot it came from, the evidence the
+   * identification was grounded in, the model and prompt that produced
+   * it, the exact plan that was approved, and the request that ran it.
+   */
+  traceability: z
+    .object({
+      discoverySnapshotCapturedAt: z.string().datetime().optional(),
+      discoveredPageCount: z.number().int().min(0).optional(),
+      applicationName: z.string().optional(),
+      identificationSource: z.string().optional(),
+      identificationConfidence: z.number().min(0).max(1).optional(),
+      identificationVersion: z.number().int().positive().optional(),
+      evidenceHash: z.string().optional(),
+      evidenceItemCount: z.number().int().min(0).optional(),
+      llmProvider: z.string().optional(),
+      llmModel: z.string().optional(),
+      promptVersion: z.string().optional(),
+      planHash: z.string().optional(),
+      approvalId: z.string().optional(),
+      approvalSnapshotHash: z.string().optional(),
+      executionRequestId: z.string().optional(),
+      executionIdempotencyKey: z.string().optional(),
+      policyVersion: z.string().optional(),
+    })
+    .optional(),
   executionPolicy: z.string(),
   runtimeVersions: z.record(z.string(), z.string()),
   stateTransitions: z.array(

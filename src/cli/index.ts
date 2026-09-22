@@ -28,6 +28,7 @@ import {
   recommendations,
   runJourney,
 } from "../services/testmap/map-service.js";
+import { createProject, listProjects } from "../services/testmap/project-service.js";
 import { detectInteractivity, type InteractivityOptions } from "./interactive/interactivity.js";
 import { createPromptSession, defaultPromptIO, isInteractiveTTY } from "./interactive/prompt-io.js";
 import {
@@ -48,6 +49,7 @@ import {
 } from "./interactive/commands/journey-approve.js";
 import { ReportInputSchema, buildReportFields, reportResolveConfig } from "./interactive/commands/report.js";
 import { runDiscoverWizard } from "./interactive/discover-wizard.js";
+import { normalizeTargetUrl } from "../services/testmap/discover-input-rules.js";
 import { checkForUpdatesIfDue } from "../services/update-check/index.js";
 import { applyUpdate } from "../services/update-check/apply-update.js";
 import { classifyExitCode } from "./exit-code.js";
@@ -128,7 +130,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const program = new Command();
 program
   .name("nova")
-  .description("Nova: a governed AI orchestration runtime for web application test automation.");
+  .description(
+    "Nova: a governed AI orchestration runtime for web application test automation.\n\n" +
+      "Guided workflow: run `nova` or `nova test` with no other arguments to launch the interactive terminal UI " +
+      "and test an application end to end. Every command below is available for CI and advanced/scripted use.",
+  );
 
 program
   .command("init")
@@ -292,6 +298,56 @@ discoverCommand.action(
   },
 );
 
+const projectCommand = program
+  .command("project")
+  .description("Group Application Test Maps under a named project.");
+
+projectCommand
+  .command("create")
+  .description(
+    "Create a project. Applications are added inside a project via `nova map discover --project <id>`.",
+  )
+  .requiredOption("--name <name>", "Project name")
+  .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false)
+  .action((options: { name: string; json: boolean }) => {
+    const runtime = trackedRuntime();
+    try {
+      const project = createProject(runtime, { name: options.name });
+      if (options.json) {
+        console.log(JSON.stringify(project));
+        return;
+      }
+      process.stdout.write(`Project ${project.id} created: ${project.name}\n`);
+      process.stdout.write(`Next: nova map discover --project ${project.id} --target <url>\n`);
+    } finally {
+      closeTrackedRuntime(runtime);
+    }
+  });
+
+projectCommand
+  .command("list")
+  .description("List every project.")
+  .option("--json", "Print machine-readable JSON to stdout instead of human-readable lines", false)
+  .action((options: { json: boolean }) => {
+    const runtime = trackedRuntime();
+    try {
+      const projects = listProjects(runtime);
+      if (options.json) {
+        console.log(JSON.stringify(projects));
+        return;
+      }
+      if (projects.length === 0) {
+        process.stdout.write("No projects yet. Create one with `nova project create --name <name>`.\n");
+        return;
+      }
+      for (const project of projects) {
+        process.stdout.write(`${project.id}  ${project.name}\n`);
+      }
+    } finally {
+      closeTrackedRuntime(runtime);
+    }
+  });
+
 program
   .command("login")
   .description(
@@ -430,6 +486,10 @@ const mapDiscoverCommand = withInteractivityOptions(
     .option("--name <applicationName>", "Name for the new map's application")
     .option("--env <environment>", "local|development|staging|production")
     .option(
+      "--project <projectId>",
+      "Project to add this application to — see `nova project create`/`nova project list`",
+    )
+    .option(
       "--storage-state <path>",
       "Path to a session captured by `nova login` — every journey run against this map reuses it",
     )
@@ -441,6 +501,7 @@ mapDiscoverCommand.action(
     target?: string;
     name?: string;
     env?: string;
+    project?: string;
     storageState?: string;
     headless: boolean;
     json: boolean;
@@ -460,6 +521,7 @@ mapDiscoverCommand.action(
         target: input.target,
         applicationName: input.name,
         environment: input.env,
+        projectId: options.project,
         storageStatePath: options.storageState,
         headless: options.headless,
         onProgress: progressHooks().onProgress,
@@ -972,15 +1034,76 @@ program
 
 program
   .command("tui")
-  .description("Launch Nova's interactive terminal UI.")
-  .action(async () => {
+  .description("Launch Nova's interactive terminal UI — the guided, primary way to test an application.")
+  .option("--no-banner", "Suppress the startup banner")
+  .action(async (options: { banner: boolean }) => {
     const runtime = trackedRuntime();
     try {
-      await runTui(runtime);
+      await runTui(runtime, { noBanner: !options.banner });
     } finally {
       closeTrackedRuntime(runtime);
     }
   });
+
+/**
+ * The product's front door. `nova test <url>` starts the complete guided
+ * workflow against that target; `nova test` (or a bare `nova`) resumes
+ * whatever is in flight, or asks for the one input it is missing.
+ *
+ * A non-TTY invocation never dead-ends on "required option not
+ * specified": it returns a structured, machine-readable error naming the
+ * missing field, the accepted flags, and a corrected command.
+ */
+program
+  .command("test [url]")
+  .description("Start (or resume) the guided end-to-end workflow against a target application.")
+  .option("--no-banner", "Suppress the startup banner")
+  .action(async (url: string | undefined, options: { banner: boolean }) => {
+    const interactive = isInteractiveTTY(defaultPromptIO) && !process.env.CI;
+    if (!interactive) {
+      const payload = {
+        error: "missing_required_input",
+        code: "NOVA_INPUT_REQUIRED",
+        missing: url ? [] : ["url"],
+        message: url
+          ? "`nova test` needs an interactive terminal. Use the scriptable commands instead."
+          : "`nova test` needs a target URL when there is no interactive terminal.",
+        acceptedFlags: ["--no-banner"],
+        example: `nova discover --target ${url ?? "https://app.example.com"} --non-interactive`,
+      };
+      process.stderr.write(`${JSON.stringify(payload)}\n`);
+      process.exitCode = 2;
+      return;
+    }
+    if (url) {
+      const normalized = normalizeTargetUrl(url);
+      if (!normalized.ok) {
+        process.stderr.write(`${normalized.error}\n`);
+        process.exitCode = 2;
+        return;
+      }
+      url = normalized.value;
+    }
+    const runtime = trackedRuntime();
+    try {
+      await runTui(runtime, { noBanner: !options.banner, target: url, guided: true });
+    } finally {
+      closeTrackedRuntime(runtime);
+    }
+  });
+
+/** True only for an http(s) URL, so a mistyped subcommand still reports itself as one. */
+function looksLikeUrl(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 async function main(): Promise<void> {
   // Best-effort, silent-on-failure: never delays a command by more than
@@ -996,6 +1119,17 @@ async function main(): Promise<void> {
     // Never let the update check itself fail a command.
   }
 
+  // Bare `nova` (no subcommand at all) launches the guided workflow
+  // directly — the primary product experience — instead of Commander's
+  // default "print help and exit". `nova <url>` is treated the same way,
+  // so the first thing a new operator is likely to type does what they
+  // mean instead of failing with "unknown command". Any real
+  // subcommand/flag (including `--help`) bypasses both.
+  if (process.argv.length <= 2) {
+    process.argv.push("test");
+  } else if (looksLikeUrl(process.argv[2])) {
+    process.argv.splice(2, 0, "test");
+  }
   await program.parseAsync();
 }
 
@@ -1016,6 +1150,11 @@ process.once("SIGINT", () => {
     }
     try {
       runtime.testMaps.close();
+    } catch {
+      // Best-effort: the process is exiting regardless.
+    }
+    try {
+      runtime.projects.close();
     } catch {
       // Best-effort: the process is exiting regardless.
     }

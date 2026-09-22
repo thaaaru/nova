@@ -103,9 +103,9 @@ async function typeAndSubmit(stdin: { write: (data: string) => void }, text: str
   await settle(400);
 }
 
-/** No map exists yet, so the home menu's numbered options are: 1 discover-app … 8 command-mode. */
+/** No map exists yet, so the home menu's numbered options are: 1 guided-test, 2 manage-projects … 9 command-mode. */
 async function openCommandMode(stdin: { write: (data: string) => void }): Promise<void> {
-  stdin.write("8");
+  stdin.write("9");
   await settle();
 }
 

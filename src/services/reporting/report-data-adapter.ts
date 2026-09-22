@@ -113,8 +113,34 @@ export function buildReportData(state: TestRunState): ReportData {
       testPlanId: state.testPlan?.id,
       testPlanVersion: state.testPlan?.version,
       approverName: state.approval?.reviewer,
-      approvalDecision: state.approval?.decision,
+      // The report's governance schema records the binary outcome; a
+      // "changes requested" plan was never approved, so it reads as rejected.
+      approvalDecision:
+        state.approval === undefined
+          ? undefined
+          : state.approval.decision === "approved"
+            ? "approved"
+            : "rejected",
       approvalDecidedAt: state.approval?.decidedAt,
+      traceability: {
+        discoverySnapshotCapturedAt: state.discoverySnapshot?.capturedAt,
+        discoveredPageCount: state.discoverySnapshot?.pages.length,
+        applicationName: state.identification?.identification.applicationName,
+        identificationSource: state.identification?.source,
+        identificationConfidence: state.identification?.identification.confidence,
+        identificationVersion: state.identification?.version,
+        evidenceHash: state.evidencePackage?.evidenceHash,
+        evidenceItemCount: state.evidencePackage?.items.length,
+        llmProvider: state.identification?.provider,
+        llmModel: state.identification?.model,
+        promptVersion: state.identification?.promptVersion,
+        planHash: state.planHash,
+        approvalId: state.approvedPlanSnapshot?.approvalId,
+        approvalSnapshotHash: state.approvedPlanSnapshot?.snapshotHash,
+        executionRequestId: state.executionRequest?.executionRequestId,
+        executionIdempotencyKey: state.executionRequest?.idempotencyKey,
+        policyVersion: state.approvedPlanSnapshot?.policyVersion ?? state.executionRequest?.policyVersion,
+      },
       executionPolicy: `${state.targetManifest.runExecutionMode} mode; scope limited to ${state.targetManifest.allowedDomains.join(", ")}`,
       runtimeVersions: { nova: NOVA_VERSION },
       stateTransitions: inferStateTransitions(state.auditEvents),
